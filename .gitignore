@@ -3,6 +3,13 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+#Ignore all .vcxproj.user files and all visual studio generated files in any directory
+**/.vcxproj.user
+**/.vs/
+**/.vcxproj.filters
+**/.vcxproj
+**/.sln
+
 # User-specific files
 *.rsuser
 *.suo
