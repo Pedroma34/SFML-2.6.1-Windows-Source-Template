@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,28 +22,24 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_MUSIC_HPP
+#define SFML_MUSIC_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/Export.hpp>
-
 #include <SFML/Audio/SoundStream.hpp>
-
-#include <filesystem>
-#include <memory>
-#include <optional>
-
-#include <cstddef>
-#include <cstdint>
+#include <SFML/Audio/InputSoundFile.hpp>
+#include <SFML/System/Mutex.hpp>
+#include <SFML/System/Time.hpp>
+#include <string>
+#include <vector>
 
 
 namespace sf
 {
-class Time;
 class InputStream;
-class InputSoundFile;
 
 ////////////////////////////////////////////////////////////
 /// \brief Streamed music played from an audio file
@@ -52,6 +48,7 @@ class InputSoundFile;
 class SFML_AUDIO_API Music : public SoundStream
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Structure defining a time range using the template type
     ///
@@ -59,30 +56,47 @@ public:
     template <typename T>
     struct Span
     {
-        T offset{}; //!< The beginning offset of the time range
-        T length{}; //!< The length of the time range
+        ////////////////////////////////////////////////////////////
+        /// \brief Default constructor
+        ///
+        ////////////////////////////////////////////////////////////
+        Span()
+        {
+
+        }
+
+        ////////////////////////////////////////////////////////////
+        /// \brief Initialization constructor
+        ///
+        /// \param off Initial Offset
+        /// \param len Initial Length
+        ///
+        ////////////////////////////////////////////////////////////
+        Span(T off, T len):
+        offset(off),
+        length(len)
+        {
+
+        }
+
+        T offset; //!< The beginning offset of the time range
+        T length; //!< The length of the time range
     };
 
     // Define the relevant Span types
-    using TimeSpan = Span<Time>;
+    typedef Span<Time> TimeSpan;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default constructor
+    ///
+    ////////////////////////////////////////////////////////////
+    Music();
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
-    ~Music() override;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Move constructor
-    ///
-    ////////////////////////////////////////////////////////////
-    Music(Music&&) noexcept;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Move assignment
-    ///
-    ////////////////////////////////////////////////////////////
-    Music& operator=(Music&&) noexcept;
+    ~Music();
 
     ////////////////////////////////////////////////////////////
     /// \brief Open a music from an audio file
@@ -98,12 +112,12 @@ public:
     ///
     /// \param filename Path of the music file to open
     ///
-    /// \return Music if loading succeeded, `std::nullopt` if it failed
+    /// \return True if loading succeeded, false if it failed
     ///
     /// \see openFromMemory, openFromStream
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Music> openFromFile(const std::filesystem::path& filename);
+    bool openFromFile(const std::string& filename);
 
     ////////////////////////////////////////////////////////////
     /// \brief Open a music from an audio file in memory
@@ -121,12 +135,12 @@ public:
     /// \param data        Pointer to the file data in memory
     /// \param sizeInBytes Size of the data to load, in bytes
     ///
-    /// \return Music if loading succeeded, `std::nullopt` if it failed
+    /// \return True if loading succeeded, false if it failed
     ///
     /// \see openFromFile, openFromStream
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Music> openFromMemory(const void* data, std::size_t sizeInBytes);
+    bool openFromMemory(const void* data, std::size_t sizeInBytes);
 
     ////////////////////////////////////////////////////////////
     /// \brief Open a music from an audio file in a custom stream
@@ -142,12 +156,12 @@ public:
     ///
     /// \param stream Source stream to read from
     ///
-    /// \return Music if loading succeeded, `std::nullopt` if it failed
+    /// \return True if loading succeeded, false if it failed
     ///
     /// \see openFromFile, openFromMemory
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Music> openFromStream(InputStream& stream);
+    bool openFromStream(InputStream& stream);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the total duration of the music
@@ -197,6 +211,7 @@ public:
     void setLoopPoints(TimeSpan timePoints);
 
 protected:
+
     ////////////////////////////////////////////////////////////
     /// \brief Request a new chunk of audio samples from the stream source
     ///
@@ -208,7 +223,7 @@ protected:
     /// \return True to continue playback, false to stop
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool onGetData(Chunk& data) override;
+    virtual bool onGetData(Chunk& data);
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the current playing position in the stream source
@@ -216,7 +231,7 @@ protected:
     /// \param timeOffset New playing position, from the beginning of the music
     ///
     ////////////////////////////////////////////////////////////
-    void onSeek(Time timeOffset) override;
+    virtual void onSeek(Time timeOffset);
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the current playing position in the stream source to the loop offset
@@ -225,24 +240,18 @@ protected:
     /// the seek position for a loop. We then determine whether we are looping on a
     /// loop point or the end-of-file, perform the seek, and return the new position.
     ///
-    /// \return The seek position after looping (or std::nullopt if there's no loop)
+    /// \return The seek position after looping (or -1 if there's no loop)
     ///
     ////////////////////////////////////////////////////////////
-    std::optional<std::uint64_t> onLoop() override;
+    virtual Int64 onLoop();
 
 private:
-    ////////////////////////////////////////////////////////////
-    /// \brief Try opening the music file from an optional input sound file
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Music> tryOpenFromInputSoundFile(std::optional<InputSoundFile>&& optFile,
-                                                                        const char*                     errorContext);
 
     ////////////////////////////////////////////////////////////
     /// \brief Initialize the internal state after loading a new music
     ///
     ////////////////////////////////////////////////////////////
-    explicit Music(InputSoundFile&& file);
+    void initialize();
 
     ////////////////////////////////////////////////////////////
     /// \brief Helper to convert an sf::Time to a sample position
@@ -252,7 +261,7 @@ private:
     /// \return The number of samples elapsed at the given time
     ///
     ////////////////////////////////////////////////////////////
-    std::uint64_t timeToSamples(Time position) const;
+    Uint64 timeToSamples(Time position) const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Helper to convert a sample position to an sf::Time
@@ -262,16 +271,21 @@ private:
     /// \return The Time position of the given sample
     ///
     ////////////////////////////////////////////////////////////
-    Time samplesToTime(std::uint64_t samples) const;
+    Time samplesToTime(Uint64 samples) const;
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    struct Impl;
-    std::unique_ptr<Impl> m_impl; //!< Implementation details
+    InputSoundFile     m_file;     //!< The streamed music file
+    std::vector<Int16> m_samples;  //!< Temporary buffer of samples
+    Mutex              m_mutex;    //!< Mutex protecting the data
+    Span<Uint64>       m_loopSpan; //!< Loop Range Specifier
 };
 
 } // namespace sf
+
+
+#endif // SFML_MUSIC_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -299,14 +313,20 @@ private:
 ///
 /// Usage example:
 /// \code
-/// // Open a music from an audio file
-/// auto music = sf::Music::openFromFile("music.ogg").value();
+/// // Declare a new music
+/// sf::Music music;
+///
+/// // Open it from an audio file
+/// if (!music.openFromFile("music.ogg"))
+/// {
+///     // error...
+/// }
 ///
 /// // Change some parameters
-/// music.setPosition({0, 1, 10}); // change its 3D position
-/// music.setPitch(2);             // increase the pitch
-/// music.setVolume(50);           // reduce the volume
-/// music.setLoop(true);           // make it loop
+/// music.setPosition(0, 1, 10); // change its 3D position
+/// music.setPitch(2);           // increase the pitch
+/// music.setVolume(50);         // reduce the volume
+/// music.setLoop(true);         // make it loop
 ///
 /// // Play it
 /// music.play();

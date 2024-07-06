@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,26 +22,20 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_WINDOWIMPLWIN32_HPP
+#define SFML_WINDOWIMPLWIN32_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Window/Keyboard.hpp>
-#include <SFML/Window/WindowEnums.hpp>
-#include <SFML/Window/WindowHandle.hpp>
+#include <SFML/Window/Event.hpp>
 #include <SFML/Window/WindowImpl.hpp>
-
-#include <SFML/System/Vector2.hpp>
-#include <SFML/System/Win32/WindowsHeader.hpp>
-
-#include <cstdint>
+#include <SFML/System/String.hpp>
+#include <windows.h>
 
 
 namespace sf
 {
-class String;
-
 namespace priv
 {
 ////////////////////////////////////////////////////////////
@@ -51,6 +45,7 @@ namespace priv
 class WindowImplWin32 : public WindowImpl
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Construct the window implementation from an existing control
     ///
@@ -65,17 +60,16 @@ public:
     /// \param mode  Video mode to use
     /// \param title Title of the window
     /// \param style Window style
-    /// \param state Window state
     /// \param settings Additional settings for the underlying OpenGL context
     ///
     ////////////////////////////////////////////////////////////
-    WindowImplWin32(VideoMode mode, const String& title, std::uint32_t style, State state, const ContextSettings& settings);
+    WindowImplWin32(VideoMode mode, const String& title, Uint32 style, const ContextSettings& settings);
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
-    ~WindowImplWin32() override;
+    ~WindowImplWin32();
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the OS-specific handle of the window
@@ -83,7 +77,7 @@ public:
     /// \return Handle of the window
     ///
     ////////////////////////////////////////////////////////////
-    WindowHandle getNativeHandle() const override;
+    virtual WindowHandle getSystemHandle() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the position of the window
@@ -91,7 +85,7 @@ public:
     /// \return Position of the window, in pixels
     ///
     ////////////////////////////////////////////////////////////
-    Vector2i getPosition() const override;
+    virtual Vector2i getPosition() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the position of the window on screen
@@ -99,7 +93,7 @@ public:
     /// \param position New position of the window, in pixels
     ///
     ////////////////////////////////////////////////////////////
-    void setPosition(const Vector2i& position) override;
+    virtual void setPosition(const Vector2i& position);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the client size of the window
@@ -107,7 +101,7 @@ public:
     /// \return Size of the window, in pixels
     ///
     ////////////////////////////////////////////////////////////
-    Vector2u getSize() const override;
+    virtual Vector2u getSize() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the size of the rendering region of the window
@@ -115,7 +109,7 @@ public:
     /// \param size New size, in pixels
     ///
     ////////////////////////////////////////////////////////////
-    void setSize(const Vector2u& size) override;
+    virtual void setSize(const Vector2u& size);
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the title of the window
@@ -123,16 +117,17 @@ public:
     /// \param title New title
     ///
     ////////////////////////////////////////////////////////////
-    void setTitle(const String& title) override;
+    virtual void setTitle(const String& title);
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the window's icon
     ///
-    /// \param size   Icon's width and height, in pixels
+    /// \param width  Icon's width, in pixels
+    /// \param height Icon's height, in pixels
     /// \param pixels Pointer to the pixels in memory, format must be RGBA 32 bits
     ///
     ////////////////////////////////////////////////////////////
-    void setIcon(const Vector2u& size, const std::uint8_t* pixels) override;
+    virtual void setIcon(unsigned int width, unsigned int height, const Uint8* pixels);
 
     ////////////////////////////////////////////////////////////
     /// \brief Show or hide the window
@@ -140,7 +135,7 @@ public:
     /// \param visible True to show, false to hide
     ///
     ////////////////////////////////////////////////////////////
-    void setVisible(bool visible) override;
+    virtual void setVisible(bool visible);
 
     ////////////////////////////////////////////////////////////
     /// \brief Show or hide the mouse cursor
@@ -148,7 +143,7 @@ public:
     /// \param visible True to show, false to hide
     ///
     ////////////////////////////////////////////////////////////
-    void setMouseCursorVisible(bool visible) override;
+    virtual void setMouseCursorVisible(bool visible);
 
     ////////////////////////////////////////////////////////////
     /// \brief Grab or release the mouse cursor
@@ -156,7 +151,7 @@ public:
     /// \param grabbed True to enable, false to disable
     ///
     ////////////////////////////////////////////////////////////
-    void setMouseCursorGrabbed(bool grabbed) override;
+    virtual void setMouseCursorGrabbed(bool grabbed);
 
     ////////////////////////////////////////////////////////////
     /// \brief Set the displayed cursor to a native system cursor
@@ -164,7 +159,7 @@ public:
     /// \param cursor Native system cursor type to display
     ///
     ////////////////////////////////////////////////////////////
-    void setMouseCursor(const CursorImpl& cursor) override;
+    virtual void setMouseCursor(const CursorImpl& cursor);
 
     ////////////////////////////////////////////////////////////
     /// \brief Enable or disable automatic key-repeat
@@ -172,14 +167,14 @@ public:
     /// \param enabled True to enable, false to disable
     ///
     ////////////////////////////////////////////////////////////
-    void setKeyRepeatEnabled(bool enabled) override;
+    virtual void setKeyRepeatEnabled(bool enabled);
 
     ////////////////////////////////////////////////////////////
     /// \brief Request the current window to be made the active
     ///        foreground window
     ///
     ////////////////////////////////////////////////////////////
-    void requestFocus() override;
+    virtual void requestFocus();
 
     ////////////////////////////////////////////////////////////
     /// \brief Check whether the window has the input focus
@@ -187,16 +182,18 @@ public:
     /// \return True if window has focus, false otherwise
     ///
     ////////////////////////////////////////////////////////////
-    bool hasFocus() const override;
+    virtual bool hasFocus() const;
 
 protected:
+
     ////////////////////////////////////////////////////////////
     /// \brief Process incoming events from the operating system
     ///
     ////////////////////////////////////////////////////////////
-    void processEvents() override;
+    virtual void processEvents();
 
 private:
+
     ////////////////////////////////////////////////////////////
     /// Register the window class
     ///
@@ -249,16 +246,6 @@ private:
     void grabCursor(bool grabbed);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Convert content size to window size including window chrome
-    ///
-    /// \param size Size to convert
-    ///
-    /// \return Converted size including window chrome
-    ///
-    ////////////////////////////////////////////////////////////
-    Vector2i contentSizeToWindowSize(const Vector2u& size);
-
-    ////////////////////////////////////////////////////////////
     /// \brief Convert a Win32 virtual key code to a SFML key code
     ///
     /// \param key   Virtual key code to convert
@@ -295,21 +282,22 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    HWND     m_handle{};            //!< Win32 handle of the window
-    LONG_PTR m_callback{};          //!< Stores the original event callback function of the control
-    bool     m_cursorVisible{true}; //!< Is the cursor visible or hidden?
-    HCURSOR  m_lastCursor{
-        LoadCursor(nullptr, IDC_ARROW)}; //!< Last cursor used -- this data is not owned by the window and is required to be always valid
-    HICON    m_icon{};                    //!< Custom icon assigned to the window
-    bool     m_keyRepeatEnabled{true}; //!< Automatic key-repeat state for keydown events
-    Vector2u m_lastSize;               //!< The last handled size of the window
-    bool     m_resizing{};             //!< Is the window being resized?
-    std::uint16_t m_surrogate{}; //!< First half of the surrogate pair, in case we're receiving a Unicode character in two events
-    bool          m_mouseInside{};   //!< Mouse is inside the window?
-    bool          m_fullscreen{};    //!< Is the window fullscreen?
-    bool          m_cursorGrabbed{}; //!< Is the mouse cursor trapped?
+    HWND     m_handle;           //!< Win32 handle of the window
+    LONG_PTR m_callback;         //!< Stores the original event callback function of the control
+    bool     m_cursorVisible;    //!< Is the cursor visible or hidden?
+    HCURSOR  m_lastCursor;       //!< Last cursor used -- this data is not owned by the window and is required to be always valid
+    HICON    m_icon;             //!< Custom icon assigned to the window
+    bool     m_keyRepeatEnabled; //!< Automatic key-repeat state for keydown events
+    Vector2u m_lastSize;         //!< The last handled size of the window
+    bool     m_resizing;         //!< Is the window being resized?
+    Uint16   m_surrogate;        //!< First half of the surrogate pair, in case we're receiving a Unicode character in two events
+    bool     m_mouseInside;      //!< Mouse is inside the window?
+    bool     m_fullscreen;       //!< Is the window fullscreen?
+    bool     m_cursorGrabbed;    //!< Is the mouse cursor trapped?
 };
 
 } // namespace priv
 
 } // namespace sf
+
+#endif // SFML_WINDOWIMPLWIN32_HPP

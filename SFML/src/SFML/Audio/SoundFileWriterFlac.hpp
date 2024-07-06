@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,22 +22,20 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_SOUNDFILEWRITERFLAC_HPP
+#define SFML_SOUNDFILEWRITERFLAC_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/SoundFileWriter.hpp>
-
 #include <FLAC/stream_encoder.h>
-#include <filesystem>
-#include <memory>
 #include <vector>
 
-#include <cstdint>
 
-
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 /// \brief Implementation of sound file writer that handles FLAC files
@@ -46,6 +44,7 @@ namespace sf::priv
 class SoundFileWriterFlac : public SoundFileWriter
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Check if this writer can handle a file on disk
     ///
@@ -54,7 +53,21 @@ public:
     /// \return True if the file can be written by this writer
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static bool check(const std::filesystem::path& filename);
+    static bool check(const std::string& filename);
+
+public:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default constructor
+    ///
+    ////////////////////////////////////////////////////////////
+    SoundFileWriterFlac();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Destructor
+    ///
+    ////////////////////////////////////////////////////////////
+    ~SoundFileWriterFlac();
 
     ////////////////////////////////////////////////////////////
     /// \brief Open a sound file for writing
@@ -62,15 +75,11 @@ public:
     /// \param filename     Path of the file to open
     /// \param sampleRate   Sample rate of the sound
     /// \param channelCount Number of channels of the sound
-    /// \param channelMap   Map of position in sample frame to sound channel
     ///
     /// \return True if the file was successfully opened
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool open(const std::filesystem::path&     filename,
-                            unsigned int                     sampleRate,
-                            unsigned int                     channelCount,
-                            const std::vector<SoundChannel>& channelMap) override;
+    virtual bool open(const std::string& filename, unsigned int sampleRate, unsigned int channelCount);
 
     ////////////////////////////////////////////////////////////
     /// \brief Write audio samples to the open file
@@ -79,20 +88,27 @@ public:
     /// \param count   Number of samples to write
     ///
     ////////////////////////////////////////////////////////////
-    void write(const std::int16_t* samples, std::uint64_t count) override;
+    virtual void write(const Int16* samples, Uint64 count);
 
 private:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Close the file
+    ///
+    ////////////////////////////////////////////////////////////
+    void close();
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    struct FlacStreamEncoderDeleter
-    {
-        void operator()(FLAC__StreamEncoder* encoder) const;
-    };
-    std::unique_ptr<FLAC__StreamEncoder, FlacStreamEncoderDeleter> m_encoder;        //!< FLAC stream encoder
-    unsigned int                                                   m_channelCount{}; //!< Number of channels
-    std::size_t               m_remapTable[8]{}; //!< Table we use to remap source to target channel order
-    std::vector<std::int32_t> m_samples32;       //!< Conversion buffer
+    FLAC__StreamEncoder* m_encoder;      //!< FLAC stream encoder
+    unsigned int         m_channelCount; //!< Number of channels
+    std::vector<Int32>   m_samples32;    //!< Conversion buffer
 };
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_SOUNDFILEWRITERFLAC_HPP

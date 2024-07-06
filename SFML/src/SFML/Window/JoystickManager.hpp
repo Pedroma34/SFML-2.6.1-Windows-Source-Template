@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,37 +22,28 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_JOYSTICKMANAGER_HPP
+#define SFML_JOYSTICKMANAGER_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/Joystick.hpp>
 #include <SFML/Window/JoystickImpl.hpp>
+#include <SFML/System/NonCopyable.hpp>
 
-#include <array>
 
-
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 /// \brief Global joystick manager
 ///
 ////////////////////////////////////////////////////////////
-class JoystickManager
+class JoystickManager : NonCopyable
 {
 public:
-    ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy constructor
-    ///
-    ////////////////////////////////////////////////////////////
-    JoystickManager(const JoystickManager&) = delete;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy assignment
-    ///
-    ////////////////////////////////////////////////////////////
-    JoystickManager& operator=(const JoystickManager&) = delete;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the global unique instance of the manager
@@ -99,6 +90,7 @@ public:
     void update();
 
 private:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
@@ -126,7 +118,12 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::array<Item, Joystick::Count> m_joysticks; //!< Joysticks information and state
+    Item m_joysticks[Joystick::Count]; //!< Joysticks information and state
 };
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_JOYSTICKMANAGER_HPP

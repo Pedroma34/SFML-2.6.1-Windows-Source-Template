@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,24 +22,22 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_GLCONTEXT_HPP
+#define SFML_GLCONTEXT_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Config.hpp>
-
 #include <SFML/Window/Context.hpp>
 #include <SFML/Window/ContextSettings.hpp>
-
-#include <SFML/System/Vector2.hpp>
-
-#include <memory>
-
-#include <cstdint>
+#include <SFML/Window/GlResource.hpp>
+#include <SFML/System/NonCopyable.hpp>
 
 
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 class WindowImpl;
 
@@ -47,36 +45,43 @@ class WindowImpl;
 /// \brief Abstract class representing an OpenGL context
 ///
 ////////////////////////////////////////////////////////////
-class GlContext
+class GlContext : NonCopyable
 {
 public:
-    ////////////////////////////////////////////////////////////
-    /// \brief Get a shared_ptr to the shared context
-    ///
-    /// \return shared_ptr to the shared context
-    ///
-    ////////////////////////////////////////////////////////////
-    static std::shared_ptr<void> getSharedContext();
 
     ////////////////////////////////////////////////////////////
-    /// \brief Register an OpenGL object to be destroyed when its containing context is destroyed
+    /// \brief Perform resource initialization
+    ///
+    /// This function is called every time an OpenGL resource is
+    /// created. When the first resource is initialized, it makes
+    /// sure that everything is ready for contexts to work properly.
+    ///
+    ////////////////////////////////////////////////////////////
+    static void initResource();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Perform resource cleanup
+    ///
+    /// This function is called every time an OpenGL resource is
+    /// destroyed. When the last resource is destroyed, it makes
+    /// sure that everything that was created by initResource()
+    /// is properly released.
+    ///
+    ////////////////////////////////////////////////////////////
+    static void cleanupResource();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Register a function to be called when a context is destroyed
     ///
     /// This is used for internal purposes in order to properly
     /// clean up OpenGL resources that cannot be shared bwteen
     /// contexts.
     ///
-    /// \param object Object to be destroyed when its containing context is destroyed
+    /// \param callback Function to be called when a context is destroyed
+    /// \param arg      Argument to pass when calling the function
     ///
     ////////////////////////////////////////////////////////////
-    static void registerUnsharedGlObject(std::shared_ptr<void> object);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Unregister an OpenGL object from its containing context
-    ///
-    /// \param object Object to be unregister
-    ///
-    ////////////////////////////////////////////////////////////
-    static void unregisterUnsharedGlObject(std::shared_ptr<void> object);
+    static void registerContextDestroyCallback(ContextDestroyCallback callback, void* arg);
 
     ////////////////////////////////////////////////////////////
     /// \brief Acquires a context for short-term use on the current thread
@@ -96,10 +101,10 @@ public:
     /// This function automatically chooses the specialized class
     /// to use according to the OS.
     ///
-    /// \return Pointer to the created context
+    /// \return Pointer to the created context (don't forget to delete it)
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<GlContext> create();
+    static GlContext* create();
 
     ////////////////////////////////////////////////////////////
     /// \brief Create a new context attached to a window
@@ -114,7 +119,7 @@ public:
     /// \return Pointer to the created context
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<GlContext> create(const ContextSettings& settings, const WindowImpl& owner, unsigned int bitsPerPixel);
+    static GlContext* create(const ContextSettings& settings, const WindowImpl* owner, unsigned int bitsPerPixel);
 
     ////////////////////////////////////////////////////////////
     /// \brief Create a new context that embeds its own rendering target
@@ -123,13 +128,15 @@ public:
     /// to use according to the OS.
     ///
     /// \param settings Creation parameters
-    /// \param size     Back buffer width and height
+    /// \param width    Back buffer width
+    /// \param height   Back buffer height
     ///
     /// \return Pointer to the created context
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<GlContext> create(const ContextSettings& settings, const Vector2u& size);
+    static GlContext* create(const ContextSettings& settings, unsigned int width, unsigned int height);
 
+public:
     ////////////////////////////////////////////////////////////
     /// \brief Check whether a given OpenGL extension is available
     ///
@@ -138,7 +145,7 @@ public:
     /// \return True if available, false if unavailable
     ///
     ////////////////////////////////////////////////////////////
-    static bool isExtensionAvailable(std::string_view name);
+    static bool isExtensionAvailable(const char* name);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the address of an OpenGL function
@@ -153,7 +160,7 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Get the currently active context
     ///
-    /// \return The currently active context or a null pointer if none is active
+    /// \return The currently active context or NULL if none is active
     ///
     ////////////////////////////////////////////////////////////
     static const GlContext* getActiveContext();
@@ -167,25 +174,13 @@ public:
     /// \return The active context's ID or 0 if no context is currently active
     ///
     ////////////////////////////////////////////////////////////
-    static std::uint64_t getActiveContextId();
+    static Uint64 getActiveContextId();
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
     virtual ~GlContext();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy constructor
-    ///
-    ////////////////////////////////////////////////////////////
-    GlContext(const GlContext&) = delete;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy assignment
-    ///
-    ////////////////////////////////////////////////////////////
-    GlContext& operator=(const GlContext&) = delete;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the settings of the context
@@ -235,6 +230,7 @@ public:
     virtual void setVerticalSyncEnabled(bool enabled) = 0;
 
 protected:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
@@ -280,14 +276,7 @@ protected:
     /// \return Score of the configuration
     ///
     ////////////////////////////////////////////////////////////
-    static int evaluateFormat(unsigned int           bitsPerPixel,
-                              const ContextSettings& settings,
-                              int                    colorBits,
-                              int                    depthBits,
-                              int                    stencilBits,
-                              int                    antialiasing,
-                              bool                   accelerated,
-                              bool                   sRgb);
+    static int evaluateFormat(unsigned int bitsPerPixel, const ContextSettings& settings, int colorBits, int depthBits, int stencilBits, int antialiasing, bool accelerated, bool sRgb);
 
     ////////////////////////////////////////////////////////////
     // Member data
@@ -295,9 +284,6 @@ protected:
     ContextSettings m_settings; //!< Creation settings of the context
 
 private:
-    struct TransientContext;
-    struct SharedContext;
-    struct Impl;
 
     ////////////////////////////////////////////////////////////
     /// \brief Perform various initializations after the context construction
@@ -311,12 +297,17 @@ private:
     /// \param requestedSettings Requested settings during context creation
     ///
     ////////////////////////////////////////////////////////////
-    void checkSettings(const ContextSettings& requestedSettings) const;
+    void checkSettings(const ContextSettings& requestedSettings);
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    const std::unique_ptr<Impl> m_impl; //!< Implementation details
+    const Uint64 m_id; //!< Unique number that identifies the context
 };
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_GLCONTEXT_HPP

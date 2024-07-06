@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,32 +25,31 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Network/SocketImpl.hpp>
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/Network/TcpSocket.hpp>
-
+#include <SFML/Network/SocketImpl.hpp>
 #include <SFML/System/Err.hpp>
-
-#include <ostream>
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-TcpListener::TcpListener() : Socket(Type::Tcp)
+TcpListener::TcpListener() :
+Socket(Tcp)
 {
+
 }
 
 
 ////////////////////////////////////////////////////////////
 unsigned short TcpListener::getLocalPort() const
 {
-    if (getNativeHandle() != priv::SocketImpl::invalidSocket())
+    if (getHandle() != priv::SocketImpl::invalidSocket())
     {
-        // Retrieve information about the local end of the socket
-        sockaddr_in                  address{};
+        // Retrieve informations about the local end of the socket
+        sockaddr_in address;
         priv::SocketImpl::AddrLength size = sizeof(address);
-        if (getsockname(getNativeHandle(), reinterpret_cast<sockaddr*>(&address), &size) != -1)
+        if (getsockname(getHandle(), reinterpret_cast<sockaddr*>(&address), &size) != -1)
         {
             return ntohs(address.sin_port);
         }
@@ -71,27 +70,27 @@ Socket::Status TcpListener::listen(unsigned short port, const IpAddress& address
     create();
 
     // Check if the address is valid
-    if (address == IpAddress::Broadcast)
-        return Status::Error;
+    if ((address == IpAddress::None) || (address == IpAddress::Broadcast))
+        return Error;
 
     // Bind the socket to the specified port
     sockaddr_in addr = priv::SocketImpl::createAddress(address.toInteger(), port);
-    if (bind(getNativeHandle(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1)
+    if (bind(getHandle(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1)
     {
         // Not likely to happen, but...
         err() << "Failed to bind listener socket to port " << port << std::endl;
-        return Status::Error;
+        return Error;
     }
 
     // Listen to the bound port
-    if (::listen(getNativeHandle(), SOMAXCONN) == -1)
+    if (::listen(getHandle(), SOMAXCONN) == -1)
     {
         // Oops, socket is deaf
         err() << "Failed to listen to port " << port << std::endl;
-        return Status::Error;
+        return Error;
     }
 
-    return Status::Done;
+    return Done;
 }
 
 
@@ -107,16 +106,16 @@ void TcpListener::close()
 Socket::Status TcpListener::accept(TcpSocket& socket)
 {
     // Make sure that we're listening
-    if (getNativeHandle() == priv::SocketImpl::invalidSocket())
+    if (getHandle() == priv::SocketImpl::invalidSocket())
     {
         err() << "Failed to accept a new connection, the socket is not listening" << std::endl;
-        return Status::Error;
+        return Error;
     }
 
     // Accept a new connection
-    sockaddr_in                  address{};
+    sockaddr_in address;
     priv::SocketImpl::AddrLength length = sizeof(address);
-    const SocketHandle           remote = ::accept(getNativeHandle(), reinterpret_cast<sockaddr*>(&address), &length);
+    SocketHandle remote = ::accept(getHandle(), reinterpret_cast<sockaddr*>(&address), &length);
 
     // Check for errors
     if (remote == priv::SocketImpl::invalidSocket())
@@ -126,7 +125,7 @@ Socket::Status TcpListener::accept(TcpSocket& socket)
     socket.close();
     socket.create(remote);
 
-    return Status::Done;
+    return Done;
 }
 
 } // namespace sf

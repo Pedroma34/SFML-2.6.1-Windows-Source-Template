@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,32 +22,24 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_TEXTURE_HPP
+#define SFML_TEXTURE_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
-
-#include <SFML/Graphics/CoordinateType.hpp>
-#include <SFML/Graphics/Rect.hpp>
-
+#include <SFML/Graphics/Image.hpp>
 #include <SFML/Window/GlResource.hpp>
-
-#include <SFML/System/Vector2.hpp>
-
-#include <filesystem>
-#include <optional>
-
-#include <cstddef>
-#include <cstdint>
 
 
 namespace sf
 {
 class InputStream;
+class RenderTarget;
+class RenderTexture;
+class Text;
 class Window;
-class Image;
 
 ////////////////////////////////////////////////////////////
 /// \brief Image living on the graphics card that can be used for drawing
@@ -56,11 +48,26 @@ class Image;
 class SFML_GRAPHICS_API Texture : GlResource
 {
 public:
+
     ////////////////////////////////////////////////////////////
-    /// \brief Destructor
+    /// \brief Types of texture coordinates that can be used for rendering
     ///
     ////////////////////////////////////////////////////////////
-    ~Texture();
+    enum CoordinateType
+    {
+        Normalized, //!< Texture coordinates in range [0 .. 1]
+        Pixels      //!< Texture coordinates in range [0 .. size]
+    };
+
+public:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default constructor
+    ///
+    /// Creates an empty texture.
+    ///
+    ////////////////////////////////////////////////////////////
+    Texture();
 
     ////////////////////////////////////////////////////////////
     /// \brief Copy constructor
@@ -71,38 +78,33 @@ public:
     Texture(const Texture& copy);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Copy assignment operator
+    /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
-    Texture& operator=(const Texture&);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Move constructor
-    ///
-    ////////////////////////////////////////////////////////////
-    Texture(Texture&&) noexcept;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Move assignment operator
-    ///
-    ////////////////////////////////////////////////////////////
-    Texture& operator=(Texture&&) noexcept;
+    ~Texture();
 
     ////////////////////////////////////////////////////////////
     /// \brief Create the texture
     ///
     /// If this function fails, the texture is left unchanged.
     ///
-    /// \param size Width and height of the texture
-    /// \param sRgb True to enable sRGB conversion, false to disable it
+    /// \param width  Width of the texture
+    /// \param height Height of the texture
     ///
-    /// \return Texture if creation was successful, otherwise `std::nullopt`
+    /// \return True if creation was successful
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Texture> create(const Vector2u& size, bool sRgb = false);
+    bool create(unsigned int width, unsigned int height);
 
     ////////////////////////////////////////////////////////////
     /// \brief Load the texture from a file on disk
+    ///
+    /// This function is a shortcut for the following code:
+    /// \code
+    /// sf::Image image;
+    /// image.loadFromFile(filename);
+    /// texture.loadFromImage(image, area);
+    /// \endcode
     ///
     /// The \a area argument can be used to load only a sub-rectangle
     /// of the whole image. If you want the entire image then leave
@@ -116,20 +118,24 @@ public:
     /// If this function fails, the texture is left unchanged.
     ///
     /// \param filename Path of the image file to load
-    /// \param sRgb     True to enable sRGB conversion, false to disable it
     /// \param area     Area of the image to load
     ///
-    /// \return Texture if loading was successful, otherwise `std::nullopt`
+    /// \return True if loading was successful
     ///
     /// \see loadFromMemory, loadFromStream, loadFromImage
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Texture> loadFromFile(const std::filesystem::path& filename,
-                                                             bool                         sRgb = false,
-                                                             const IntRect&               area = {});
+    bool loadFromFile(const std::string& filename, const IntRect& area = IntRect());
 
     ////////////////////////////////////////////////////////////
     /// \brief Load the texture from a file in memory
+    ///
+    /// This function is a shortcut for the following code:
+    /// \code
+    /// sf::Image image;
+    /// image.loadFromMemory(data, size);
+    /// texture.loadFromImage(image, area);
+    /// \endcode
     ///
     /// The \a area argument can be used to load only a sub-rectangle
     /// of the whole image. If you want the entire image then leave
@@ -144,22 +150,24 @@ public:
     ///
     /// \param data Pointer to the file data in memory
     /// \param size Size of the data to load, in bytes
-    /// \param sRgb True to enable sRGB conversion, false to disable it
     /// \param area Area of the image to load
     ///
-    /// \return Texture if loading was successful, otherwise `std::nullopt`
+    /// \return True if loading was successful
     ///
     /// \see loadFromFile, loadFromStream, loadFromImage
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Texture> loadFromMemory(
-        const void*    data,
-        std::size_t    size,
-        bool           sRgb = false,
-        const IntRect& area = {});
+    bool loadFromMemory(const void* data, std::size_t size, const IntRect& area = IntRect());
 
     ////////////////////////////////////////////////////////////
     /// \brief Load the texture from a custom stream
+    ///
+    /// This function is a shortcut for the following code:
+    /// \code
+    /// sf::Image image;
+    /// image.loadFromStream(stream);
+    /// texture.loadFromImage(image, area);
+    /// \endcode
     ///
     /// The \a area argument can be used to load only a sub-rectangle
     /// of the whole image. If you want the entire image then leave
@@ -173,15 +181,14 @@ public:
     /// If this function fails, the texture is left unchanged.
     ///
     /// \param stream Source stream to read from
-    /// \param sRgb   True to enable sRGB conversion, false to disable it
     /// \param area   Area of the image to load
     ///
-    /// \return Texture if loading was successful, otherwise `std::nullopt`
+    /// \return True if loading was successful
     ///
     /// \see loadFromFile, loadFromMemory, loadFromImage
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Texture> loadFromStream(InputStream& stream, bool sRgb = false, const IntRect& area = {});
+    bool loadFromStream(InputStream& stream, const IntRect& area = IntRect());
 
     ////////////////////////////////////////////////////////////
     /// \brief Load the texture from an image
@@ -198,15 +205,14 @@ public:
     /// If this function fails, the texture is left unchanged.
     ///
     /// \param image Image to load into the texture
-    /// \param sRgb   True to enable sRGB conversion, false to disable it
     /// \param area  Area of the image to load
     ///
-    /// \return Texture if loading was successful, otherwise `std::nullopt`
+    /// \return True if loading was successful
     ///
     /// \see loadFromFile, loadFromMemory
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<Texture> loadFromImage(const Image& image, bool sRgb = false, const IntRect& area = {});
+    bool loadFromImage(const Image& image, const IntRect& area = IntRect());
 
     ////////////////////////////////////////////////////////////
     /// \brief Return the size of the texture
@@ -238,7 +244,7 @@ public:
     /// the \a area rectangle, and to contain 32-bits RGBA pixels.
     ///
     /// No additional check is performed on the size of the pixel
-    /// array. Passing invalid arguments will lead to an undefined
+    /// array, passing invalid arguments will lead to an undefined
     /// behavior.
     ///
     /// This function does nothing if \a pixels is null or if the
@@ -247,7 +253,7 @@ public:
     /// \param pixels Array of pixels to copy to the texture
     ///
     ////////////////////////////////////////////////////////////
-    void update(const std::uint8_t* pixels);
+    void update(const Uint8* pixels);
 
     ////////////////////////////////////////////////////////////
     /// \brief Update a part of the texture from an array of pixels
@@ -256,30 +262,31 @@ public:
     /// \a height arguments, and it must contain 32-bits RGBA pixels.
     ///
     /// No additional check is performed on the size of the pixel
-    /// array or the bounds of the area to update. Passing invalid
+    /// array or the bounds of the area to update, passing invalid
     /// arguments will lead to an undefined behavior.
     ///
     /// This function does nothing if \a pixels is null or if the
     /// texture was not previously created.
     ///
     /// \param pixels Array of pixels to copy to the texture
-    /// \param size   Width and height of the pixel region contained in \a pixels
-    /// \param dest   Coordinates of the destination position
+    /// \param width  Width of the pixel region contained in \a pixels
+    /// \param height Height of the pixel region contained in \a pixels
+    /// \param x      X offset in the texture where to copy the source pixels
+    /// \param y      Y offset in the texture where to copy the source pixels
     ///
     ////////////////////////////////////////////////////////////
-    void update(const std::uint8_t* pixels, const Vector2u& size, const Vector2u& dest);
+    void update(const Uint8* pixels, unsigned int width, unsigned int height, unsigned int x, unsigned int y);
 
     ////////////////////////////////////////////////////////////
     /// \brief Update a part of this texture from another texture
     ///
     /// Although the source texture can be smaller than this texture,
     /// this function is usually used for updating the whole texture.
-    /// The other overload, which has an additional destination
-    /// argument, is more convenient for updating a sub-area of this
-    /// texture.
+    /// The other overload, which has (x, y) additional arguments,
+    /// is more convenient for updating a sub-area of this texture.
     ///
     /// No additional check is performed on the size of the passed
-    /// texture. Passing a texture bigger than this texture
+    /// texture, passing a texture bigger than this texture
     /// will lead to an undefined behavior.
     ///
     /// This function does nothing if either texture was not
@@ -293,30 +300,30 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Update a part of this texture from another texture
     ///
-    /// No additional check is performed on the size of the texture.
-    /// Passing an invalid combination of texture size and destination
+    /// No additional check is performed on the size of the texture,
+    /// passing an invalid combination of texture size and offset
     /// will lead to an undefined behavior.
     ///
     /// This function does nothing if either texture was not
     /// previously created.
     ///
     /// \param texture Source texture to copy to this texture
-    /// \param dest    Coordinates of the destination position
+    /// \param x       X offset in this texture where to copy the source texture
+    /// \param y       Y offset in this texture where to copy the source texture
     ///
     ////////////////////////////////////////////////////////////
-    void update(const Texture& texture, const Vector2u& dest);
+    void update(const Texture& texture, unsigned int x, unsigned int y);
 
     ////////////////////////////////////////////////////////////
     /// \brief Update the texture from an image
     ///
     /// Although the source image can be smaller than the texture,
     /// this function is usually used for updating the whole texture.
-    /// The other overload, which has an additional destination
-    /// argument, is more convenient for updating a sub-area of the
-    /// texture.
+    /// The other overload, which has (x, y) additional arguments,
+    /// is more convenient for updating a sub-area of the texture.
     ///
-    /// No additional check is performed on the size of the image.
-    /// Passing an image bigger than the texture will lead to an
+    /// No additional check is performed on the size of the image,
+    /// passing an image bigger than the texture will lead to an
     /// undefined behavior.
     ///
     /// This function does nothing if the texture was not
@@ -330,30 +337,30 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Update a part of the texture from an image
     ///
-    /// No additional check is performed on the size of the image.
-    /// Passing an invalid combination of image size and destination
+    /// No additional check is performed on the size of the image,
+    /// passing an invalid combination of image size and offset
     /// will lead to an undefined behavior.
     ///
     /// This function does nothing if the texture was not
     /// previously created.
     ///
     /// \param image Image to copy to the texture
-    /// \param dest  Coordinates of the destination position
+    /// \param x     X offset in the texture where to copy the source image
+    /// \param y     Y offset in the texture where to copy the source image
     ///
     ////////////////////////////////////////////////////////////
-    void update(const Image& image, const Vector2u& dest);
+    void update(const Image& image, unsigned int x, unsigned int y);
 
     ////////////////////////////////////////////////////////////
     /// \brief Update the texture from the contents of a window
     ///
     /// Although the source window can be smaller than the texture,
     /// this function is usually used for updating the whole texture.
-    /// The other overload, which has an additional destination
-    /// argument, is more convenient for updating a sub-area of the
-    /// texture.
+    /// The other overload, which has (x, y) additional arguments,
+    /// is more convenient for updating a sub-area of the texture.
     ///
-    /// No additional check is performed on the size of the window.
-    /// Passing a window bigger than the texture will lead to an
+    /// No additional check is performed on the size of the window,
+    /// passing a window bigger than the texture will lead to an
     /// undefined behavior.
     ///
     /// This function does nothing if either the texture or the window
@@ -367,18 +374,19 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Update a part of the texture from the contents of a window
     ///
-    /// No additional check is performed on the size of the window.
-    /// Passing an invalid combination of window size and destination
+    /// No additional check is performed on the size of the window,
+    /// passing an invalid combination of window size and offset
     /// will lead to an undefined behavior.
     ///
     /// This function does nothing if either the texture or the window
     /// was not previously created.
     ///
     /// \param window Window to copy to the texture
-    /// \param dest   Coordinates of the destination position
+    /// \param x      X offset in the texture where to copy the source window
+    /// \param y      Y offset in the texture where to copy the source window
     ///
     ////////////////////////////////////////////////////////////
-    void update(const Window& window, const Vector2u& dest);
+    void update(const Window& window, unsigned int x, unsigned int y);
 
     ////////////////////////////////////////////////////////////
     /// \brief Enable or disable the smooth filter
@@ -405,6 +413,31 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     bool isSmooth() const;
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Enable or disable conversion from sRGB
+    ///
+    /// When providing texture data from an image file or memory, it can
+    /// either be stored in a linear color space or an sRGB color space.
+    /// Most digital images account for gamma correction already, so they
+    /// would need to be "uncorrected" back to linear color space before
+    /// being processed by the hardware. The hardware can automatically
+    /// convert it from the sRGB color space to a linear color space when
+    /// it gets sampled. When the rendered image gets output to the final
+    /// framebuffer, it gets converted back to sRGB.
+    ///
+    /// After enabling or disabling sRGB conversion, make sure to reload
+    /// the texture data in order for the setting to take effect.
+    ///
+    /// This option is only useful in conjunction with an sRGB capable
+    /// framebuffer. This can be requested during window creation.
+    ///
+    /// \param sRgb True to enable sRGB conversion, false to disable it
+    ///
+    /// \see isSrgb
+    ///
+    ////////////////////////////////////////////////////////////
+    void setSrgb(bool sRgb);
 
     ////////////////////////////////////////////////////////////
     /// \brief Tell whether the texture source is converted from sRGB or not
@@ -473,7 +506,17 @@ public:
     /// \return True if mipmap generation was successful, false if unsuccessful
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool generateMipmap();
+    bool generateMipmap();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Overload of assignment operator
+    ///
+    /// \param right Instance to assign
+    ///
+    /// \return Reference to self
+    ///
+    ////////////////////////////////////////////////////////////
+    Texture& operator =(const Texture& right);
 
     ////////////////////////////////////////////////////////////
     /// \brief Swap the contents of this texture with those of another
@@ -481,7 +524,7 @@ public:
     /// \param right Instance to swap with
     ///
     ////////////////////////////////////////////////////////////
-    void swap(Texture& right) noexcept;
+    void swap(Texture& right);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the underlying OpenGL handle of the texture.
@@ -509,7 +552,7 @@ public:
     /// // draw OpenGL stuff that use t1...
     /// sf::Texture::bind(&t2);
     /// // draw OpenGL stuff that use t2...
-    /// sf::Texture::bind(nullptr);
+    /// sf::Texture::bind(NULL);
     /// // draw OpenGL stuff that use no texture...
     /// \endcode
     ///
@@ -526,7 +569,7 @@ public:
     /// \param coordinateType Type of texture coordinates to use
     ///
     ////////////////////////////////////////////////////////////
-    static void bind(const Texture* texture, CoordinateType coordinateType = CoordinateType::Normalized);
+    static void bind(const Texture* texture, CoordinateType coordinateType = Normalized);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the maximum texture size allowed
@@ -541,17 +584,10 @@ public:
     static unsigned int getMaximumSize();
 
 private:
+
     friend class Text;
     friend class RenderTexture;
     friend class RenderTarget;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Default constructor
-    ///
-    /// Creates an empty texture.
-    ///
-    ////////////////////////////////////////////////////////////
-    Texture(const Vector2u& size, const Vector2u& actualSize, unsigned int texture, bool sRgb);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get a valid image size according to hardware support
@@ -580,29 +616,22 @@ private:
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    Vector2u      m_size;            //!< Public texture size
-    Vector2u      m_actualSize;      //!< Actual texture size (can be greater than public size because of padding)
-    unsigned int  m_texture{};       //!< Internal texture identifier
-    bool          m_isSmooth{};      //!< Status of the smooth filter
-    bool          m_sRgb{};          //!< Should the texture source be converted from sRGB?
-    bool          m_isRepeated{};    //!< Is the texture in repeat mode?
-    mutable bool  m_pixelsFlipped{}; //!< To work around the inconsistency in Y orientation
-    bool          m_fboAttachment{}; //!< Is this texture owned by a framebuffer object?
-    bool          m_hasMipmap{};     //!< Has the mipmap been generated?
-    std::uint64_t m_cacheId;         //!< Unique number that identifies the texture to the render target's cache
+    Vector2u     m_size;          //!< Public texture size
+    Vector2u     m_actualSize;    //!< Actual texture size (can be greater than public size because of padding)
+    unsigned int m_texture;       //!< Internal texture identifier
+    bool         m_isSmooth;      //!< Status of the smooth filter
+    bool         m_sRgb;          //!< Should the texture source be converted from sRGB?
+    bool         m_isRepeated;    //!< Is the texture in repeat mode?
+    mutable bool m_pixelsFlipped; //!< To work around the inconsistency in Y orientation
+    bool         m_fboAttachment; //!< Is this texture owned by a framebuffer object?
+    bool         m_hasMipmap;     //!< Has the mipmap been generated?
+    Uint64       m_cacheId;       //!< Unique number that identifies the texture to the render target's cache
 };
-
-////////////////////////////////////////////////////////////
-/// \brief Swap the contents of one texture with those of another
-///
-/// \param left First instance to swap
-/// \param right Second instance to swap
-///
-////////////////////////////////////////////////////////////
-SFML_GRAPHICS_API void swap(Texture& left, Texture& right) noexcept;
 
 } // namespace sf
 
+
+#endif // SFML_TEXTURE_HPP
 
 ////////////////////////////////////////////////////////////
 /// \class sf::Texture
@@ -644,28 +673,19 @@ SFML_GRAPHICS_API void swap(Texture& left, Texture& right) noexcept;
 /// that a pixel must be composed of 8 bits red, green, blue and
 /// alpha channels -- just like a sf::Color.
 ///
-/// When providing texture data from an image file or memory, it can
-/// either be stored in a linear color space or an sRGB color space.
-/// Most digital images account for gamma correction already, so they
-/// would need to be "uncorrected" back to linear color space before
-/// being processed by the hardware. The hardware can automatically
-/// convert it from the sRGB color space to a linear color space when
-/// it gets sampled. When the rendered image gets output to the final
-/// framebuffer, it gets converted back to sRGB.
-///
-/// This option is only useful in conjunction with an sRGB capable
-/// framebuffer. This can be requested during window creation.
-///
 /// Usage example:
 /// \code
 /// // This example shows the most common use of sf::Texture:
 /// // drawing a sprite
 ///
 /// // Load a texture from a file
-/// const auto texture = sf::Texture::loadFromFile("texture.png").value();
+/// sf::Texture texture;
+/// if (!texture.loadFromFile("texture.png"))
+///     return -1;
 ///
 /// // Assign it to a sprite
-/// sf::Sprite sprite(texture);
+/// sf::Sprite sprite;
+/// sprite.setTexture(texture);
 ///
 /// // Draw the textured sprite
 /// window.draw(sprite);
@@ -676,7 +696,9 @@ SFML_GRAPHICS_API void swap(Texture& left, Texture& right) noexcept;
 /// // streaming real-time data, like video frames
 ///
 /// // Create an empty texture
-/// auto texture = sf::Texture::create({640, 480}).value();
+/// sf::Texture texture;
+/// if (!texture.create(640, 480))
+///     return -1;
 ///
 /// // Create a sprite that will display the texture
 /// sf::Sprite sprite(texture);
@@ -686,7 +708,7 @@ SFML_GRAPHICS_API void swap(Texture& left, Texture& right) noexcept;
 ///     ...
 ///
 ///     // update the texture
-///     std::uint8_t* pixels = ...; // get a fresh chunk of pixels (the next frame of a movie, for example)
+///     sf::Uint8* pixels = ...; // get a fresh chunk of pixels (the next frame of a movie, for example)
 ///     texture.update(pixels);
 ///
 ///     // draw it
@@ -703,7 +725,7 @@ SFML_GRAPHICS_API void swap(Texture& left, Texture& right) noexcept;
 /// \code
 /// sf::Texture::bind(&texture);
 /// ... render OpenGL geometry ...
-/// sf::Texture::bind(nullptr);
+/// sf::Texture::bind(NULL);
 /// \endcode
 ///
 /// \see sf::Sprite, sf::Image, sf::RenderTexture

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,35 +25,34 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
+#include <SFML/Network/UdpSocket.hpp>
 #include <SFML/Network/IpAddress.hpp>
 #include <SFML/Network/Packet.hpp>
 #include <SFML/Network/SocketImpl.hpp>
-#include <SFML/Network/UdpSocket.hpp>
-
 #include <SFML/System/Err.hpp>
-
-#include <ostream>
-
-#include <cstddef>
+#include <algorithm>
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-UdpSocket::UdpSocket() : Socket(Type::Udp)
+UdpSocket::UdpSocket() :
+Socket  (Udp),
+m_buffer(MaxDatagramSize)
 {
+
 }
 
 
 ////////////////////////////////////////////////////////////
 unsigned short UdpSocket::getLocalPort() const
 {
-    if (getNativeHandle() != priv::SocketImpl::invalidSocket())
+    if (getHandle() != priv::SocketImpl::invalidSocket())
     {
-        // Retrieve information about the local end of the socket
-        sockaddr_in                  address{};
+        // Retrieve informations about the local end of the socket
+        sockaddr_in address;
         priv::SocketImpl::AddrLength size = sizeof(address);
-        if (getsockname(getNativeHandle(), reinterpret_cast<sockaddr*>(&address), &size) != -1)
+        if (getsockname(getHandle(), reinterpret_cast<sockaddr*>(&address), &size) != -1)
         {
             return ntohs(address.sin_port);
         }
@@ -74,18 +73,18 @@ Socket::Status UdpSocket::bind(unsigned short port, const IpAddress& address)
     create();
 
     // Check if the address is valid
-    if (address == IpAddress::Broadcast)
-        return Status::Error;
+    if ((address == IpAddress::None) || (address == IpAddress::Broadcast))
+        return Error;
 
     // Bind the socket
     sockaddr_in addr = priv::SocketImpl::createAddress(address.toInteger(), port);
-    if (::bind(getNativeHandle(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1)
+    if (::bind(getHandle(), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == -1)
     {
         err() << "Failed to bind socket to port " << port << std::endl;
-        return Status::Error;
+        return Error;
     }
 
-    return Status::Done;
+    return Done;
 }
 
 
@@ -108,77 +107,61 @@ Socket::Status UdpSocket::send(const void* data, std::size_t size, const IpAddre
     {
         err() << "Cannot send data over the network "
               << "(the number of bytes to send is greater than sf::UdpSocket::MaxDatagramSize)" << std::endl;
-        return Status::Error;
+        return Error;
     }
 
     // Build the target address
     sockaddr_in address = priv::SocketImpl::createAddress(remoteAddress.toInteger(), remotePort);
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuseless-cast"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wuseless-cast"
     // Send the data (unlike TCP, all the data is always sent in one call)
-    const int sent = static_cast<int>(
-        sendto(getNativeHandle(),
-               static_cast<const char*>(data),
-               static_cast<priv::SocketImpl::Size>(size),
-               0,
-               reinterpret_cast<sockaddr*>(&address),
-               sizeof(address)));
-#pragma GCC diagnostic pop
+    int sent = static_cast<int>(sendto(getHandle(), static_cast<const char*>(data), static_cast<priv::SocketImpl::Size>(size), 0, reinterpret_cast<sockaddr*>(&address), sizeof(address)));
+    #pragma GCC diagnostic pop
 
     // Check for errors
     if (sent < 0)
         return priv::SocketImpl::getErrorStatus();
 
-    return Status::Done;
+    return Done;
 }
 
 
 ////////////////////////////////////////////////////////////
-Socket::Status UdpSocket::receive(void*                     data,
-                                  std::size_t               size,
-                                  std::size_t&              received,
-                                  std::optional<IpAddress>& remoteAddress,
-                                  unsigned short&           remotePort)
+Socket::Status UdpSocket::receive(void* data, std::size_t size, std::size_t& received, IpAddress& remoteAddress, unsigned short& remotePort)
 {
     // First clear the variables to fill
     received      = 0;
-    remoteAddress = std::nullopt;
+    remoteAddress = IpAddress();
     remotePort    = 0;
 
     // Check the destination buffer
     if (!data)
     {
         err() << "Cannot receive data from the network (the destination buffer is invalid)" << std::endl;
-        return Status::Error;
+        return Error;
     }
 
     // Data that will be filled with the other computer's address
     sockaddr_in address = priv::SocketImpl::createAddress(INADDR_ANY, 0);
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wuseless-cast"
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wuseless-cast"
     // Receive a chunk of bytes
-    priv::SocketImpl::AddrLength addressSize  = sizeof(address);
-    const int                    sizeReceived = static_cast<int>(
-        recvfrom(getNativeHandle(),
-                 static_cast<char*>(data),
-                 static_cast<priv::SocketImpl::Size>(size),
-                 0,
-                 reinterpret_cast<sockaddr*>(&address),
-                 &addressSize));
-#pragma GCC diagnostic pop
+    priv::SocketImpl::AddrLength addressSize = sizeof(address);
+    int sizeReceived = static_cast<int>(recvfrom(getHandle(), static_cast<char*>(data), static_cast<priv::SocketImpl::Size>(size), 0, reinterpret_cast<sockaddr*>(&address), &addressSize));
+    #pragma GCC diagnostic pop
 
     // Check for errors
     if (sizeReceived < 0)
         return priv::SocketImpl::getErrorStatus();
 
-    // Fill the sender information
+    // Fill the sender informations
     received      = static_cast<std::size_t>(sizeReceived);
     remoteAddress = IpAddress(ntohl(address.sin_addr.s_addr));
     remotePort    = ntohs(address.sin_port);
 
-    return Status::Done;
+    return Done;
 }
 
 
@@ -203,18 +186,18 @@ Socket::Status UdpSocket::send(Packet& packet, const IpAddress& remoteAddress, u
 
 
 ////////////////////////////////////////////////////////////
-Socket::Status UdpSocket::receive(Packet& packet, std::optional<IpAddress>& remoteAddress, unsigned short& remotePort)
+Socket::Status UdpSocket::receive(Packet& packet, IpAddress& remoteAddress, unsigned short& remotePort)
 {
     // See the detailed comment in send(Packet) above.
 
     // Receive the datagram
-    std::size_t  received = 0;
-    const Status status   = receive(m_buffer.data(), m_buffer.size(), received, remoteAddress, remotePort);
+    std::size_t received = 0;
+    Status status = receive(&m_buffer[0], m_buffer.size(), received, remoteAddress, remotePort);
 
     // If we received valid data, we can copy it to the user packet
     packet.clear();
-    if ((status == Status::Done) && (received > 0))
-        packet.onReceive(m_buffer.data(), received);
+    if ((status == Done) && (received > 0))
+        packet.onReceive(&m_buffer[0], received);
 
     return status;
 }

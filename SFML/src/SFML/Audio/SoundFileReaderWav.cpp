@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,177 +25,333 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Audio/MiniaudioUtils.hpp>
 #include <SFML/Audio/SoundFileReaderWav.hpp>
-
-#include <SFML/System/Err.hpp>
 #include <SFML/System/InputStream.hpp>
-
-#include <array>
-#include <ostream>
-#include <vector>
-
+#include <SFML/System/Err.hpp>
+#include <algorithm>
+#include <cctype>
 #include <cassert>
-#include <cstddef>
+#include <cstring>
 
 
 namespace
 {
-ma_result onRead(ma_decoder* decoder, void* buffer, size_t bytesToRead, size_t* bytesRead)
-{
-    auto*               stream = static_cast<sf::InputStream*>(decoder->pUserData);
-    const std::optional count  = stream->read(buffer, bytesToRead);
+    // The following functions read integers as little endian and
+    // return them in the host byte order
 
-    if (!count.has_value())
-        return MA_ERROR;
-
-    *bytesRead = static_cast<std::size_t>(*count);
-    return MA_SUCCESS;
-}
-
-ma_result onSeek(ma_decoder* decoder, ma_int64 byteOffset, ma_seek_origin origin)
-{
-    auto* stream = static_cast<sf::InputStream*>(decoder->pUserData);
-
-    switch (origin)
+    bool decode(sf::InputStream& stream, sf::Uint8& value)
     {
-        case ma_seek_origin_start:
-        {
-            if (!stream->seek(static_cast<std::size_t>(byteOffset)).has_value())
-                return MA_ERROR;
-
-            return MA_SUCCESS;
-        }
-        case ma_seek_origin_current:
-        {
-            if (!stream->tell().has_value())
-                return MA_ERROR;
-
-            if (!stream->seek(stream->tell().value() + static_cast<std::size_t>(byteOffset)).has_value())
-                return MA_ERROR;
-
-            return MA_SUCCESS;
-        }
-        // According to miniaudio comments, ma_seek_origin_end is not used by decoders
-        default:
-            return MA_ERROR;
+         return static_cast<std::size_t>(stream.read(&value, sizeof(value))) == sizeof(value);
     }
-}
-} // namespace
 
-namespace sf::priv
+    bool decode(sf::InputStream& stream, sf::Int16& value)
+    {
+        unsigned char bytes[sizeof(value)];
+        if (static_cast<std::size_t>(stream.read(bytes, static_cast<sf::Int64>(sizeof(bytes)))) != sizeof(bytes))
+            return false;
+
+        value = static_cast<sf::Int16>(bytes[0] | (bytes[1] << 8));
+
+        return true;
+    }
+
+    bool decode(sf::InputStream& stream, sf::Uint16& value)
+    {
+        unsigned char bytes[sizeof(value)];
+        if (static_cast<std::size_t>(stream.read(bytes, static_cast<sf::Int64>(sizeof(bytes)))) != sizeof(bytes))
+            return false;
+
+        value = static_cast<sf::Uint16>(bytes[0] | (bytes[1] << 8));
+
+        return true;
+    }
+
+    bool decode24bit(sf::InputStream& stream, sf::Uint32& value)
+    {
+        unsigned char bytes[3];
+        if (static_cast<std::size_t>(stream.read(bytes, static_cast<sf::Int64>(sizeof(bytes)))) != sizeof(bytes))
+            return false;
+
+        value = static_cast<sf::Uint32>(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16));
+
+        return true;
+    }
+
+    bool decode(sf::InputStream& stream, sf::Uint32& value)
+    {
+        unsigned char bytes[sizeof(value)];
+        if (static_cast<std::size_t>(stream.read(bytes, static_cast<sf::Int64>(sizeof(bytes)))) != sizeof(bytes))
+            return false;
+
+        value = static_cast<sf::Uint32>(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
+
+        return true;
+    }
+
+    const sf::Uint64 mainChunkSize = 12;
+
+    const sf::Uint16 waveFormatPcm = 1;
+
+    const sf::Uint16 waveFormatExtensible= 65534;
+
+    const char* waveSubformatPcm =
+        "\x01\x00\x00\x00\x00\x00\x10\x00"
+        "\x80\x00\x00\xAA\x00\x38\x9B\x71";
+}
+
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 bool SoundFileReaderWav::check(InputStream& stream)
 {
-    auto config           = ma_decoder_config_init_default();
-    config.encodingFormat = ma_encoding_format_wav;
-    config.format         = ma_format_s16;
-    ma_decoder decoder{};
+    char header[mainChunkSize];
+    if (stream.read(header, sizeof(header)) < static_cast<Int64>(sizeof(header)))
+        return false;
 
-    if (ma_decoder_init(&onRead, &onSeek, &stream, &config, &decoder) == MA_SUCCESS)
-    {
-        ma_decoder_uninit(&decoder);
-        return true;
-    }
-
-    return false;
+    return (header[0] == 'R') && (header[1] == 'I') && (header[2] == 'F') && (header[3] == 'F')
+        && (header[8] == 'W') && (header[9] == 'A') && (header[10] == 'V') && (header[11] == 'E');
 }
 
 
 ////////////////////////////////////////////////////////////
-SoundFileReaderWav::~SoundFileReaderWav()
+SoundFileReaderWav::SoundFileReaderWav() :
+m_stream        (NULL),
+m_bytesPerSample(0),
+m_dataStart     (0),
+m_dataEnd       (0)
 {
-    if (m_decoder)
-    {
-        if (const ma_result result = ma_decoder_uninit(&*m_decoder); result != MA_SUCCESS)
-            err() << "Failed to uninitialize wav decoder: " << ma_result_description(result) << std::endl;
-    }
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<SoundFileReader::Info> SoundFileReaderWav::open(InputStream& stream)
+bool SoundFileReaderWav::open(InputStream& stream, Info& info)
 {
-    if (m_decoder)
+    m_stream = &stream;
+
+    if (!parseHeader(info))
     {
-        if (const ma_result result = ma_decoder_uninit(&*m_decoder); result != MA_SUCCESS)
+        err() << "Failed to open WAV sound file (invalid or unsupported file)" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////
+void SoundFileReaderWav::seek(Uint64 sampleOffset)
+{
+    assert(m_stream);
+
+    m_stream->seek(static_cast<Int64>(m_dataStart + sampleOffset * m_bytesPerSample));
+}
+
+
+////////////////////////////////////////////////////////////
+Uint64 SoundFileReaderWav::read(Int16* samples, Uint64 maxCount)
+{
+    assert(m_stream);
+
+    Uint64 count = 0;
+    Uint64 startPos = static_cast<Uint64>(m_stream->tell());
+
+    // Tracking of m_dataEnd is important to prevent sf::Music from reading
+    // data until EOF, as WAV files may have metadata at the end.
+    while ((count < maxCount) && (startPos + count * m_bytesPerSample < m_dataEnd))
+    {
+        switch (m_bytesPerSample)
         {
-            err() << "Failed to uninitialize wav decoder: " << ma_result_description(result) << std::endl;
-            return std::nullopt;
+            case 1:
+            {
+                Uint8 sample = 0;
+                if (decode(*m_stream, sample))
+                    *samples++ = static_cast<Int16>((static_cast<Int16>(sample) - 128) << 8);
+                else
+                    return count;
+                break;
+            }
+
+            case 2:
+            {
+                Int16 sample = 0;
+                if (decode(*m_stream, sample))
+                    *samples++ = sample;
+                else
+                    return count;
+                break;
+            }
+
+            case 3:
+            {
+                Uint32 sample = 0;
+                if (decode24bit(*m_stream, sample))
+                    *samples++ = static_cast<Int16>(sample >> 8);
+                else
+                    return count;
+                break;
+            }
+
+            case 4:
+            {
+                Uint32 sample = 0;
+                if (decode(*m_stream, sample))
+                    *samples++ = static_cast<Int16>(sample >> 16);
+                else
+                    return count;
+                break;
+            }
+
+            default:
+            {
+                assert(false);
+                return 0;
+            }
+        }
+
+        ++count;
+    }
+
+    return count;
+}
+
+
+////////////////////////////////////////////////////////////
+bool SoundFileReaderWav::parseHeader(Info& info)
+{
+    assert(m_stream);
+
+    // If we are here, it means that the first part of the header
+    // (the format) has already been checked
+    char mainChunk[mainChunkSize];
+    if (static_cast<std::size_t>(m_stream->read(mainChunk, static_cast<Int64>(sizeof(mainChunk)))) != sizeof(mainChunk))
+        return false;
+
+    // Parse all the sub-chunks
+    bool dataChunkFound = false;
+    while (!dataChunkFound)
+    {
+        // Parse the sub-chunk id and size
+        char subChunkId[4];
+        if (static_cast<std::size_t>(m_stream->read(subChunkId, static_cast<Int64>(sizeof(subChunkId)))) != sizeof(subChunkId))
+            return false;
+        Uint32 subChunkSize = 0;
+        if (!decode(*m_stream, subChunkSize))
+            return false;
+        Int64 subChunkStart = m_stream->tell();
+        if (subChunkStart == -1)
+            return false;
+
+        // Check which chunk it is
+        if ((subChunkId[0] == 'f') && (subChunkId[1] == 'm') && (subChunkId[2] == 't') && (subChunkId[3] == ' '))
+        {
+            // "fmt" chunk
+
+            // Audio format
+            Uint16 format = 0;
+            if (!decode(*m_stream, format))
+                return false;
+            if ((format != waveFormatPcm) && (format != waveFormatExtensible))
+                return false;
+
+            // Channel count
+            Uint16 channelCount = 0;
+            if (!decode(*m_stream, channelCount))
+                return false;
+            info.channelCount = channelCount;
+
+            // Sample rate
+            Uint32 sampleRate = 0;
+            if (!decode(*m_stream, sampleRate))
+                return false;
+            info.sampleRate = sampleRate;
+
+            // Byte rate
+            Uint32 byteRate = 0;
+            if (!decode(*m_stream, byteRate))
+                return false;
+
+            // Block align
+            Uint16 blockAlign = 0;
+            if (!decode(*m_stream, blockAlign))
+                return false;
+
+            // Bits per sample
+            Uint16 bitsPerSample = 0;
+            if (!decode(*m_stream, bitsPerSample))
+                return false;
+            if (bitsPerSample != 8 && bitsPerSample != 16 && bitsPerSample != 24 && bitsPerSample != 32)
+            {
+                err() << "Unsupported sample size: " << bitsPerSample << " bit (Supported sample sizes are 8/16/24/32 bit)" << std::endl;
+                return false;
+            }
+            m_bytesPerSample = bitsPerSample / 8;
+
+            if (format == waveFormatExtensible)
+            {
+                // Extension size
+                Uint16 extensionSize = 0;
+                if (!decode(*m_stream, extensionSize))
+                    return false;
+
+                // Valid bits per sample
+                Uint16 validBitsPerSample = 0;
+                if (!decode(*m_stream, validBitsPerSample))
+                    return false;
+
+                // Channel mask
+                Uint32 channelMask = 0;
+                if (!decode(*m_stream, channelMask))
+                    return false;
+
+                // Subformat
+                char subformat[16];
+                if (static_cast<std::size_t>(m_stream->read(subformat, static_cast<Int64>(sizeof(subformat)))) != sizeof(subformat))
+                    return false;
+
+                if (std::memcmp(subformat, waveSubformatPcm, sizeof(subformat)) != 0)
+                {
+                    err() << "Unsupported format: extensible format with non-PCM subformat" << std::endl;
+                    return false;
+                }
+
+                if (validBitsPerSample != bitsPerSample)
+                {
+                    err() << "Unsupported format: sample size (" << validBitsPerSample << " bits) and "
+                            "sample container size (" << bitsPerSample << " bits) differ" << std::endl;
+                    return false;
+                }
+            }
+
+            // Skip potential extra information
+            if (m_stream->seek(subChunkStart + subChunkSize) == -1)
+                return false;
+        }
+        else if ((subChunkId[0] == 'd') && (subChunkId[1] == 'a') && (subChunkId[2] == 't') && (subChunkId[3] == 'a'))
+        {
+            // "data" chunk
+
+            // Compute the total number of samples
+            info.sampleCount = subChunkSize / m_bytesPerSample;
+
+            // Store the start and end position of samples in the file
+            m_dataStart = static_cast<Uint64>(subChunkStart);
+            m_dataEnd = m_dataStart + info.sampleCount * m_bytesPerSample;
+
+            dataChunkFound = true;
+        }
+        else
+        {
+            // unknown chunk, skip it
+            if (m_stream->seek(m_stream->tell() + subChunkSize) == -1)
+                return false;
         }
     }
-    else
-    {
-        m_decoder.emplace();
-    }
 
-    auto config           = ma_decoder_config_init_default();
-    config.encodingFormat = ma_encoding_format_wav;
-    config.format         = ma_format_s16;
-
-    if (const ma_result result = ma_decoder_init(&onRead, &onSeek, &stream, &config, &*m_decoder); result != MA_SUCCESS)
-    {
-        err() << "Failed to initialize wav decoder: " << ma_result_description(result) << std::endl;
-        m_decoder = std::nullopt;
-        return std::nullopt;
-    }
-
-    ma_uint64 frameCount{};
-    if (const ma_result result = ma_decoder_get_available_frames(&*m_decoder, &frameCount); result != MA_SUCCESS)
-    {
-        err() << "Failed to get available frames from wav decoder: " << ma_result_description(result) << std::endl;
-        return std::nullopt;
-    }
-
-    auto                       format = ma_format_unknown;
-    ma_uint32                  sampleRate{};
-    std::array<ma_channel, 20> channelMap{};
-    if (const ma_result result = ma_decoder_get_data_format(&*m_decoder,
-                                                            &format,
-                                                            &m_channelCount,
-                                                            &sampleRate,
-                                                            channelMap.data(),
-                                                            channelMap.size());
-        result != MA_SUCCESS)
-    {
-        err() << "Failed to get data format from wav decoder: " << ma_result_description(result) << std::endl;
-        return std::nullopt;
-    }
-
-    std::vector<SoundChannel> soundChannels;
-    soundChannels.reserve(m_channelCount);
-
-    for (auto i = 0u; i < m_channelCount; ++i)
-        soundChannels.emplace_back(priv::MiniaudioUtils::miniaudioChannelToSoundChannel(channelMap[i]));
-
-    return Info{frameCount * m_channelCount, m_channelCount, sampleRate, std::move(soundChannels)};
+    return true;
 }
 
+} // namespace priv
 
-////////////////////////////////////////////////////////////
-void SoundFileReaderWav::seek(std::uint64_t sampleOffset)
-{
-    assert(m_decoder && "wav decoder not initialized. Call SoundFileReaderWav::open() to initialize it.");
-
-    if (const ma_result result = ma_decoder_seek_to_pcm_frame(&*m_decoder, sampleOffset / m_channelCount);
-        result != MA_SUCCESS)
-        err() << "Failed to seek wav sound stream: " << ma_result_description(result) << std::endl;
-}
-
-
-////////////////////////////////////////////////////////////
-std::uint64_t SoundFileReaderWav::read(std::int16_t* samples, std::uint64_t maxCount)
-{
-    assert(m_decoder && "wav decoder not initialized. Call SoundFileReaderWav::open() to initialize it.");
-
-    ma_uint64 framesRead{};
-
-    if (const ma_result result = ma_decoder_read_pcm_frames(&*m_decoder, samples, maxCount / m_channelCount, &framesRead);
-        result != MA_SUCCESS)
-        err() << "Failed to read from wav sound stream: " << ma_result_description(result) << std::endl;
-
-    return framesRead * m_channelCount;
-}
-
-} // namespace sf::priv
+} // namespace sf

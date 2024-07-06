@@ -1,5 +1,8 @@
+#include "SFML/Graphics.hpp" //Has to be included first, otherwise rect.inl will not compile.
+#include "SFML/Audio.hpp"
 #include <windows.h>
-#include "SFML/Graphics.hpp"
+#include <iostream>
+#include <Directory.h>
 
 int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWSTR cmdline,	_In_ int cmdshow){
 
@@ -11,15 +14,32 @@ int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWS
     freopen_s(&file, "CONIN$", "r", stdin);
     */
 
-    sf::RenderWindow window(sf::VideoMode(sf::Vector2u(800, 600)), "SFML works!");
+
+	sf::RenderWindow window(sf::VideoMode(800, 600), "SFML works!");
+
+    //Sound
+	sf::SoundBuffer buffer;
+	std::string soundPath = Directory::GetExeDirectory() + std::string("Data/Audio/gunshot.wav");
+	if (!buffer.loadFromFile(soundPath)) {
+        MessageBoxA(NULL, std::string("Can't load: " + soundPath).c_str(), "Error", MB_ICONERROR);
+		return 1;
+    }
+
+	sf::Sound sound;
+	sound.setBuffer(buffer);
 
     sf::CircleShape shape(100.f);
     shape.setFillColor(sf::Color::Green);
 
     while (window.isOpen()){
-        while (const auto event = window.pollEvent()) {
-            if (event->is<sf::Event::Closed>())
+		sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed)
                 window.close();
+            else if (event.type == sf::Event::KeyPressed) {
+				if (event.key.code == sf::Keyboard::Space)
+					sound.play();
+            }
         }
 
         window.clear();
@@ -30,4 +50,3 @@ int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWS
     return 0;
 
 }
-

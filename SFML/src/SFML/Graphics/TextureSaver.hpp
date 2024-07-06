@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,15 +22,18 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_TEXTURESAVER_HPP
+#define SFML_TEXTURESAVER_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GLExtensions.hpp>
+#include <SFML/Graphics/GLCheck.hpp>
 
 
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 /// \brief Automatic wrapper for saving and restoring the current texture binding
@@ -39,6 +42,7 @@ namespace sf::priv
 class TextureSaver
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
@@ -56,10 +60,16 @@ public:
     ~TextureSaver();
 
 private:
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    GLint m_textureBinding{}; //!< Texture binding to restore
+    GLint m_textureBinding; //!< Texture binding to restore
 };
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_TEXTURESAVER_HPP

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,28 +22,22 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_VERTEXARRAY_HPP
+#define SFML_VERTEXARRAY_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
-
-#include <SFML/Graphics/Drawable.hpp>
+#include <SFML/Graphics/Vertex.hpp>
 #include <SFML/Graphics/PrimitiveType.hpp>
 #include <SFML/Graphics/Rect.hpp>
-#include <SFML/Graphics/RenderStates.hpp>
-#include <SFML/Graphics/Vertex.hpp>
-
+#include <SFML/Graphics/Drawable.hpp>
 #include <vector>
-
-#include <cstddef>
 
 
 namespace sf
 {
-class RenderTarget;
-
 ////////////////////////////////////////////////////////////
 /// \brief Define a set of one or more 2D primitives
 ///
@@ -51,13 +45,14 @@ class RenderTarget;
 class SFML_GRAPHICS_API VertexArray : public Drawable
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
     /// Creates an empty vertex array.
     ///
     ////////////////////////////////////////////////////////////
-    VertexArray() = default;
+    VertexArray();
 
     ////////////////////////////////////////////////////////////
     /// \brief Construct the vertex array with a type and an initial number of vertices
@@ -90,7 +85,7 @@ public:
     /// \see getVertexCount
     ///
     ////////////////////////////////////////////////////////////
-    Vertex& operator[](std::size_t index);
+    Vertex& operator [](std::size_t index);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get a read-only access to a vertex by its index
@@ -106,7 +101,7 @@ public:
     /// \see getVertexCount
     ///
     ////////////////////////////////////////////////////////////
-    const Vertex& operator[](std::size_t index) const;
+    const Vertex& operator [](std::size_t index) const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Clear the vertex array
@@ -149,7 +144,8 @@ public:
     /// \li As points
     /// \li As lines
     /// \li As triangles
-    /// The default primitive type is sf::PrimitiveType::Points.
+    /// \li As quads
+    /// The default primitive type is sf::Points.
     ///
     /// \param type Type of primitive
     ///
@@ -176,6 +172,7 @@ public:
     FloatRect getBounds() const;
 
 private:
+
     ////////////////////////////////////////////////////////////
     /// \brief Draw the vertex array to a render target
     ///
@@ -183,16 +180,21 @@ private:
     /// \param states Current render states
     ///
     ////////////////////////////////////////////////////////////
-    void draw(RenderTarget& target, RenderStates states) const override;
+    virtual void draw(RenderTarget& target, RenderStates states) const;
+
+private:
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::vector<Vertex> m_vertices;                             //!< Vertices contained in the array
-    PrimitiveType       m_primitiveType{PrimitiveType::Points}; //!< Type of primitives to draw
+    std::vector<Vertex> m_vertices;      //!< Vertices contained in the array
+    PrimitiveType       m_primitiveType; //!< Type of primitives to draw
 };
 
 } // namespace sf
+
+
+#endif // SFML_VERTEXARRAY_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -207,7 +209,7 @@ private:
 ///
 /// Example:
 /// \code
-/// sf::VertexArray lines(sf::PrimitiveType::LineStrip, 4);
+/// sf::VertexArray lines(sf::LineStrip, 4);
 /// lines[0].position = sf::Vector2f(10, 0);
 /// lines[1].position = sf::Vector2f(20, 0);
 /// lines[2].position = sf::Vector2f(30, 5);

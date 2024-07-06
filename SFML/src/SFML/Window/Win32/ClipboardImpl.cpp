@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -26,17 +26,30 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/Win32/ClipboardImpl.hpp>
-
 #include <SFML/System/Err.hpp>
 #include <SFML/System/String.hpp>
-#include <SFML/System/Win32/WindowsHeader.hpp>
+#include <iostream>
+#include <windows.h>
 
-#include <ostream>
+namespace
+{
+    std::string getErrorString(DWORD error)
+    {
+        PTCHAR buffer;
 
-#include <cstring>
+        if (FormatMessage(FORMAT_MESSAGE_MAX_WIDTH_MASK | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, error, 0, reinterpret_cast<PTCHAR>(&buffer), 0, NULL) == 0)
+            return "Unknown error.";
+
+        sf::String message = buffer;
+        LocalFree(buffer);
+        return message.toAnsiString();
+    }
+}
 
 
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 String ClipboardImpl::getString()
@@ -45,27 +58,27 @@ String ClipboardImpl::getString()
 
     if (!IsClipboardFormatAvailable(CF_UNICODETEXT))
     {
-        err() << "Failed to get the clipboard data in Unicode format." << std::endl;
+        err() << "Failed to get the clipboard data in Unicode format: " << getErrorString(GetLastError()) << std::endl;
         return text;
     }
 
-    if (!OpenClipboard(nullptr))
+    if (!OpenClipboard(NULL))
     {
-        err() << "Failed to open the Win32 clipboard." << std::endl;
+        err() << "Failed to open the Win32 clipboard: " << getErrorString(GetLastError()) << std::endl;
         return text;
     }
 
-    HANDLE clipboardHandle = GetClipboardData(CF_UNICODETEXT);
+    HANDLE clipboard_handle = GetClipboardData(CF_UNICODETEXT);
 
-    if (!clipboardHandle)
+    if (!clipboard_handle)
     {
-        err() << "Failed to get Win32 handle for clipboard content." << std::endl;
+        err() << "Failed to get Win32 handle for clipboard content: " << getErrorString(GetLastError()) << std::endl;
         CloseClipboard();
         return text;
     }
 
-    text = String(static_cast<wchar_t*>(GlobalLock(clipboardHandle)));
-    GlobalUnlock(clipboardHandle);
+    text = String(static_cast<wchar_t*>(GlobalLock(clipboard_handle)));
+    GlobalUnlock(clipboard_handle);
 
     CloseClipboard();
     return text;
@@ -75,30 +88,33 @@ String ClipboardImpl::getString()
 ////////////////////////////////////////////////////////////
 void ClipboardImpl::setString(const String& text)
 {
-    if (!OpenClipboard(nullptr))
+    if (!OpenClipboard(NULL))
     {
-        err() << "Failed to open the Win32 clipboard." << std::endl;
+        err() << "Failed to open the Win32 clipboard: " << getErrorString(GetLastError()) << std::endl;
         return;
     }
 
     if (!EmptyClipboard())
     {
-        err() << "Failed to empty the Win32 clipboard." << std::endl;
+        err() << "Failed to empty the Win32 clipboard: " << getErrorString(GetLastError()) << std::endl;
+        CloseClipboard();
         return;
     }
 
     // Create a Win32-compatible string
-    const std::size_t stringSize   = (text.getSize() + 1) * sizeof(WCHAR);
-    HANDLE            stringHandle = GlobalAlloc(GMEM_MOVEABLE, stringSize);
+    size_t string_size = (text.getSize() + 1) * sizeof(WCHAR);
+    HANDLE string_handle = GlobalAlloc(GMEM_MOVEABLE, string_size);
 
-    if (stringHandle)
+    if (string_handle)
     {
-        std::memcpy(GlobalLock(stringHandle), text.toWideString().data(), stringSize);
-        GlobalUnlock(stringHandle);
-        SetClipboardData(CF_UNICODETEXT, stringHandle);
+        memcpy(GlobalLock(string_handle), text.toWideString().data(), string_size);
+        GlobalUnlock(string_handle);
+        SetClipboardData(CF_UNICODETEXT, string_handle);
     }
 
     CloseClipboard();
 }
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -28,64 +28,38 @@
 #include <SFML/Window/Cursor.hpp>
 #include <SFML/Window/CursorImpl.hpp>
 
-#include <SFML/System/Err.hpp>
-#include <SFML/System/Vector2.hpp>
-
-#include <memory>
-#include <ostream>
-
 namespace sf
 {
 
 ////////////////////////////////////////////////////////////
-Cursor::Cursor() : m_impl(std::make_unique<priv::CursorImpl>())
+Cursor::Cursor() :
+m_impl(new priv::CursorImpl())
 {
+    // That's it
 }
 
 
 ////////////////////////////////////////////////////////////
-Cursor::~Cursor() = default;
-
-
-////////////////////////////////////////////////////////////
-Cursor::Cursor(Cursor&&) noexcept = default;
-
-
-////////////////////////////////////////////////////////////
-Cursor& Cursor::operator=(Cursor&&) noexcept = default;
-
-
-////////////////////////////////////////////////////////////
-std::optional<Cursor> Cursor::loadFromPixels(const std::uint8_t* pixels, Vector2u size, Vector2u hotspot)
+Cursor::~Cursor()
 {
-    if ((pixels == nullptr) || (size.x == 0) || (size.y == 0))
-    {
-        err() << "Failed to load cursor from pixels (invalid arguments)" << std::endl;
-        return std::nullopt;
-    }
-
-    Cursor cursor;
-    if (!cursor.m_impl->loadFromPixels(pixels, size, hotspot))
-    {
-        // Error message generated in called function.
-        return std::nullopt;
-    }
-
-    return cursor;
+    delete m_impl;
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<Cursor> Cursor::loadFromSystem(Type type)
+bool Cursor::loadFromPixels(const Uint8* pixels, Vector2u size, Vector2u hotspot)
 {
-    Cursor cursor;
-    if (!cursor.m_impl->loadFromSystem(type))
-    {
-        // Error message generated in called function.
-        return std::nullopt;
-    }
+    if ((pixels == 0) || (size.x == 0) || (size.y == 0))
+        return false;
+    else
+        return m_impl->loadFromPixels(pixels, size, hotspot);
+}
 
-    return cursor;
+
+////////////////////////////////////////////////////////////
+bool Cursor::loadFromSystem(Type type)
+{
+    return m_impl->loadFromSystem(type);
 }
 
 
@@ -96,3 +70,4 @@ const priv::CursorImpl& Cursor::getImpl() const
 }
 
 } // namespace sf
+

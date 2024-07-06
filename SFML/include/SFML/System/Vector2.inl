@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,96 +22,40 @@
 //
 ////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////
-// Headers
-////////////////////////////////////////////////////////////
-#include <SFML/System/Vector2.hpp> // NOLINT(misc-header-include-cycle)
 
-#include <cassert>
-
-
-namespace sf
-{
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T>::Vector2() = default;
-
-
-////////////////////////////////////////////////////////////
-#if defined(__GNUC__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshadow"
-#endif
-template <typename T>
-constexpr Vector2<T>::Vector2(T x, T y) : x(x), y(y)
+inline Vector2<T>::Vector2() :
+x(0),
+y(0)
 {
+
 }
-#if defined(__GNUC__)
-#pragma GCC diagnostic pop
-#endif
+
+
+////////////////////////////////////////////////////////////
+template <typename T>
+inline Vector2<T>::Vector2(T X, T Y) :
+x(X),
+y(Y)
+{
+
+}
 
 
 ////////////////////////////////////////////////////////////
 template <typename T>
 template <typename U>
-constexpr Vector2<T>::Vector2(const Vector2<U>& vector) : x(static_cast<T>(vector.x)), y(static_cast<T>(vector.y))
+inline Vector2<T>::Vector2(const Vector2<U>& vector) :
+x(static_cast<T>(vector.x)),
+y(static_cast<T>(vector.y))
 {
 }
 
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr T Vector2<T>::lengthSq() const
-{
-    return dot(*this);
-}
-
-
-////////////////////////////////////////////////////////////
-template <typename T>
-constexpr Vector2<T> Vector2<T>::perpendicular() const
-{
-    return Vector2<T>(-y, x);
-}
-
-
-////////////////////////////////////////////////////////////
-template <typename T>
-constexpr T Vector2<T>::dot(const Vector2<T>& rhs) const
-{
-    return x * rhs.x + y * rhs.y;
-}
-
-
-////////////////////////////////////////////////////////////
-template <typename T>
-constexpr T Vector2<T>::cross(const Vector2<T>& rhs) const
-{
-    return x * rhs.y - y * rhs.x;
-}
-
-
-////////////////////////////////////////////////////////////
-template <typename T>
-constexpr Vector2<T> Vector2<T>::cwiseMul(const Vector2<T>& rhs) const
-{
-    return Vector2<T>(x * rhs.x, y * rhs.y);
-}
-
-
-////////////////////////////////////////////////////////////
-template <typename T>
-constexpr Vector2<T> Vector2<T>::cwiseDiv(const Vector2<T>& rhs) const
-{
-    assert(rhs.x != 0 && "Vector2::cwiseDiv() cannot divide by 0");
-    assert(rhs.y != 0 && "Vector2::cwiseDiv() cannot divide by 0");
-    return Vector2<T>(x / rhs.x, y / rhs.y);
-}
-
-
-////////////////////////////////////////////////////////////
-template <typename T>
-constexpr Vector2<T> operator-(const Vector2<T>& right)
+inline Vector2<T> operator -(const Vector2<T>& right)
 {
     return Vector2<T>(-right.x, -right.y);
 }
@@ -119,7 +63,7 @@ constexpr Vector2<T> operator-(const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T>& operator+=(Vector2<T>& left, const Vector2<T>& right)
+inline Vector2<T>& operator +=(Vector2<T>& left, const Vector2<T>& right)
 {
     left.x += right.x;
     left.y += right.y;
@@ -130,7 +74,7 @@ constexpr Vector2<T>& operator+=(Vector2<T>& left, const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T>& operator-=(Vector2<T>& left, const Vector2<T>& right)
+inline Vector2<T>& operator -=(Vector2<T>& left, const Vector2<T>& right)
 {
     left.x -= right.x;
     left.y -= right.y;
@@ -141,7 +85,7 @@ constexpr Vector2<T>& operator-=(Vector2<T>& left, const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T> operator+(const Vector2<T>& left, const Vector2<T>& right)
+inline Vector2<T> operator +(const Vector2<T>& left, const Vector2<T>& right)
 {
     return Vector2<T>(left.x + right.x, left.y + right.y);
 }
@@ -149,7 +93,7 @@ constexpr Vector2<T> operator+(const Vector2<T>& left, const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T> operator-(const Vector2<T>& left, const Vector2<T>& right)
+inline Vector2<T> operator -(const Vector2<T>& left, const Vector2<T>& right)
 {
     return Vector2<T>(left.x - right.x, left.y - right.y);
 }
@@ -157,7 +101,7 @@ constexpr Vector2<T> operator-(const Vector2<T>& left, const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T> operator*(const Vector2<T>& left, T right)
+inline Vector2<T> operator *(const Vector2<T>& left, T right)
 {
     return Vector2<T>(left.x * right, left.y * right);
 }
@@ -165,7 +109,7 @@ constexpr Vector2<T> operator*(const Vector2<T>& left, T right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T> operator*(T left, const Vector2<T>& right)
+inline Vector2<T> operator *(T left, const Vector2<T>& right)
 {
     return Vector2<T>(right.x * left, right.y * left);
 }
@@ -173,7 +117,7 @@ constexpr Vector2<T> operator*(T left, const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T>& operator*=(Vector2<T>& left, T right)
+inline Vector2<T>& operator *=(Vector2<T>& left, T right)
 {
     left.x *= right;
     left.y *= right;
@@ -184,18 +128,16 @@ constexpr Vector2<T>& operator*=(Vector2<T>& left, T right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T> operator/(const Vector2<T>& left, T right)
+inline Vector2<T> operator /(const Vector2<T>& left, T right)
 {
-    assert(right != 0 && "Vector2::operator/ cannot divide by 0");
     return Vector2<T>(left.x / right, left.y / right);
 }
 
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr Vector2<T>& operator/=(Vector2<T>& left, T right)
+inline Vector2<T>& operator /=(Vector2<T>& left, T right)
 {
-    assert(right != 0 && "Vector2::operator/= cannot divide by 0");
     left.x /= right;
     left.y /= right;
 
@@ -205,7 +147,7 @@ constexpr Vector2<T>& operator/=(Vector2<T>& left, T right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr bool operator==(const Vector2<T>& left, const Vector2<T>& right)
+inline bool operator ==(const Vector2<T>& left, const Vector2<T>& right)
 {
     return (left.x == right.x) && (left.y == right.y);
 }
@@ -213,20 +155,7 @@ constexpr bool operator==(const Vector2<T>& left, const Vector2<T>& right)
 
 ////////////////////////////////////////////////////////////
 template <typename T>
-constexpr bool operator!=(const Vector2<T>& left, const Vector2<T>& right)
+inline bool operator !=(const Vector2<T>& left, const Vector2<T>& right)
 {
     return (left.x != right.x) || (left.y != right.y);
 }
-
-
-////////////////////////////////////////////////////////////
-// Static member data
-////////////////////////////////////////////////////////////
-
-template <typename T>
-const Vector2<T> Vector2<T>::UnitX(static_cast<T>(1), static_cast<T>(0));
-
-template <typename T>
-const Vector2<T> Vector2<T>::UnitY(static_cast<T>(0), static_cast<T>(1));
-
-} // namespace sf

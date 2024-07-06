@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,33 +25,31 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/System/Time.hpp>
 #include <SFML/System/Win32/SleepImpl.hpp>
-#include <SFML/System/Win32/WindowsHeader.hpp>
+#include <windows.h>
 
-#include <mmsystem.h>
 
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 void sleepImpl(Time time)
 {
-    // Get the minimum supported timer resolution on this system
-    static const UINT periodMin = []
-    {
-        TIMECAPS tc;
-        timeGetDevCaps(&tc, sizeof(TIMECAPS));
-        return tc.wPeriodMin;
-    }();
+    // Get the supported timer resolutions on this system
+    TIMECAPS tc;
+    timeGetDevCaps(&tc, sizeof(TIMECAPS));
 
     // Set the timer resolution to the minimum for the Sleep call
-    timeBeginPeriod(periodMin);
+    timeBeginPeriod(tc.wPeriodMin);
 
     // Wait...
     ::Sleep(static_cast<DWORD>(time.asMilliseconds()));
 
     // Reset the timer resolution back to the system default
-    timeEndPeriod(periodMin);
+    timeEndPeriod(tc.wPeriodMin);
 }
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf

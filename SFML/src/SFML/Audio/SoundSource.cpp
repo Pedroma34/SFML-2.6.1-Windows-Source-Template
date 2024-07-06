@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -26,352 +26,191 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/SoundSource.hpp>
+#include <SFML/Audio/ALCheck.hpp>
 
-#include <miniaudio.h>
-
-#include <algorithm>
-
+#if defined(__APPLE__)
+    #if defined(__clang__)
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    #elif defined(__GNUC__)
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    #endif
+#endif
 
 namespace sf
 {
-// NOLINTBEGIN(readability-make-member-function-const)
 ////////////////////////////////////////////////////////////
-void SoundSource::setPitch(float pitch)
+SoundSource::SoundSource()
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_pitch(sound, pitch);
+    alCheck(alGenSources(1, &m_source));
+    alCheck(alSourcei(m_source, AL_BUFFER, 0));
 }
 
 
 ////////////////////////////////////////////////////////////
-void SoundSource::setPan(float pan)
+SoundSource::SoundSource(const SoundSource& copy)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_pan(sound, pan);
+    alCheck(alGenSources(1, &m_source));
+    alCheck(alSourcei(m_source, AL_BUFFER, 0));
+
+    setPitch(copy.getPitch());
+    setVolume(copy.getVolume());
+    setPosition(copy.getPosition());
+    setRelativeToListener(copy.isRelativeToListener());
+    setMinDistance(copy.getMinDistance());
+    setAttenuation(copy.getAttenuation());
+}
+
+
+////////////////////////////////////////////////////////////
+SoundSource::~SoundSource()
+{
+    alCheck(alSourcei(m_source, AL_BUFFER, 0));
+    alCheck(alDeleteSources(1, &m_source));
+}
+
+
+////////////////////////////////////////////////////////////
+void SoundSource::setPitch(float pitch)
+{
+    alCheck(alSourcef(m_source, AL_PITCH, pitch));
 }
 
 
 ////////////////////////////////////////////////////////////
 void SoundSource::setVolume(float volume)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_volume(sound, volume * 0.01f);
+    alCheck(alSourcef(m_source, AL_GAIN, volume * 0.01f));
 }
 
 
 ////////////////////////////////////////////////////////////
-void SoundSource::setSpatializationEnabled(bool enabled)
+void SoundSource::setPosition(float x, float y, float z)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_spatialization_enabled(sound, enabled ? MA_TRUE : MA_FALSE);
+    alCheck(alSource3f(m_source, AL_POSITION, x, y, z));
 }
 
 
 ////////////////////////////////////////////////////////////
 void SoundSource::setPosition(const Vector3f& position)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_position(sound, position.x, position.y, position.z);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setDirection(const Vector3f& direction)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_direction(sound, direction.x, direction.y, direction.z);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setCone(const Cone& cone)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_cone(sound,
-                          std::clamp(cone.innerAngle, Angle::Zero, degrees(360.f)).asRadians(),
-                          std::clamp(cone.outerAngle, Angle::Zero, degrees(360.f)).asRadians(),
-                          cone.outerGain);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setVelocity(const Vector3f& velocity)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_velocity(sound, velocity.x, velocity.y, velocity.z);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setDopplerFactor(float factor)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_doppler_factor(sound, factor);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setDirectionalAttenuationFactor(float factor)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_directional_attenuation_factor(sound, factor);
+    setPosition(position.x, position.y, position.z);
 }
 
 
 ////////////////////////////////////////////////////////////
 void SoundSource::setRelativeToListener(bool relative)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_positioning(sound, relative ? ma_positioning_relative : ma_positioning_absolute);
+    alCheck(alSourcei(m_source, AL_SOURCE_RELATIVE, relative));
 }
 
 
 ////////////////////////////////////////////////////////////
 void SoundSource::setMinDistance(float distance)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_min_distance(sound, distance);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setMaxDistance(float distance)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_max_distance(sound, distance);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setMinGain(float gain)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_min_gain(sound, gain);
-}
-
-
-////////////////////////////////////////////////////////////
-void SoundSource::setMaxGain(float gain)
-{
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_max_gain(sound, gain);
+    alCheck(alSourcef(m_source, AL_REFERENCE_DISTANCE, distance));
 }
 
 
 ////////////////////////////////////////////////////////////
 void SoundSource::setAttenuation(float attenuation)
 {
-    if (auto* sound = static_cast<ma_sound*>(getSound()))
-        ma_sound_set_rolloff(sound, attenuation);
-}
-
-
-////////////////////////////////////////////////////////////
-// NOLINTNEXTLINE(performance-unnecessary-value-param)
-void SoundSource::setEffectProcessor(EffectProcessor)
-{
+    alCheck(alSourcef(m_source, AL_ROLLOFF_FACTOR, attenuation));
 }
 
 
 ////////////////////////////////////////////////////////////
 float SoundSource::getPitch() const
 {
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_pitch(sound);
+    ALfloat pitch;
+    alCheck(alGetSourcef(m_source, AL_PITCH, &pitch));
 
-    return 0.f;
-}
-
-
-////////////////////////////////////////////////////////////
-float SoundSource::getPan() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_pan(sound);
-
-    return 0.f;
+    return pitch;
 }
 
 
 ////////////////////////////////////////////////////////////
 float SoundSource::getVolume() const
 {
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_volume(sound) * 100.f;
+    ALfloat gain;
+    alCheck(alGetSourcef(m_source, AL_GAIN, &gain));
 
-    return 0.f;
-}
-
-
-////////////////////////////////////////////////////////////
-bool SoundSource::isSpatializationEnabled() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_is_spatialization_enabled(sound) == MA_TRUE;
-
-    return false;
+    return gain * 100.f;
 }
 
 
 ////////////////////////////////////////////////////////////
 Vector3f SoundSource::getPosition() const
 {
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-    {
-        const auto position = ma_sound_get_position(sound);
-        return {position.x, position.y, position.z};
-    }
+    Vector3f position;
+    alCheck(alGetSource3f(m_source, AL_POSITION, &position.x, &position.y, &position.z));
 
-    return {};
-}
-
-
-////////////////////////////////////////////////////////////
-Vector3f SoundSource::getDirection() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-    {
-        const auto direction = ma_sound_get_direction(sound);
-        return {direction.x, direction.y, direction.z};
-    }
-
-    return {};
-}
-
-
-////////////////////////////////////////////////////////////
-SoundSource::Cone SoundSource::getCone() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-    {
-        float innerAngle = 0.f;
-        float outerAngle = 0.f;
-        Cone  cone;
-        ma_sound_get_cone(sound, &innerAngle, &outerAngle, &cone.outerGain);
-        cone.innerAngle = radians(innerAngle);
-        cone.outerAngle = radians(outerAngle);
-        return cone;
-    }
-
-    return Cone{radians(0), radians(0), 0.f};
-}
-
-
-////////////////////////////////////////////////////////////
-Vector3f SoundSource::getVelocity() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-    {
-        const auto velocity = ma_sound_get_velocity(sound);
-        return {velocity.x, velocity.y, velocity.z};
-    }
-
-    return {};
-}
-
-
-////////////////////////////////////////////////////////////
-float SoundSource::getDopplerFactor() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_doppler_factor(sound);
-
-    return 0.f;
-}
-
-
-////////////////////////////////////////////////////////////
-float SoundSource::getDirectionalAttenuationFactor() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_directional_attenuation_factor(sound);
-
-    return 0.f;
+    return position;
 }
 
 
 ////////////////////////////////////////////////////////////
 bool SoundSource::isRelativeToListener() const
 {
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_positioning(sound) == ma_positioning_relative;
+    ALint relative;
+    alCheck(alGetSourcei(m_source, AL_SOURCE_RELATIVE, &relative));
 
-    return false;
+    return relative != 0;
 }
 
 
 ////////////////////////////////////////////////////////////
 float SoundSource::getMinDistance() const
 {
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_min_distance(sound);
+    ALfloat distance;
+    alCheck(alGetSourcef(m_source, AL_REFERENCE_DISTANCE, &distance));
 
-    return 0.f;
-}
-
-
-////////////////////////////////////////////////////////////
-float SoundSource::getMaxDistance() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_max_distance(sound);
-
-    return 0.f;
-}
-
-
-////////////////////////////////////////////////////////////
-float SoundSource::getMinGain() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_min_gain(sound);
-
-    return 0.f;
-}
-
-
-////////////////////////////////////////////////////////////
-float SoundSource::getMaxGain() const
-{
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_max_gain(sound);
-
-    return 0.f;
+    return distance;
 }
 
 
 ////////////////////////////////////////////////////////////
 float SoundSource::getAttenuation() const
 {
-    if (const auto* sound = static_cast<const ma_sound*>(getSound()))
-        return ma_sound_get_rolloff(sound);
+    ALfloat attenuation;
+    alCheck(alGetSourcef(m_source, AL_ROLLOFF_FACTOR, &attenuation));
 
-    return 0.f;
+    return attenuation;
 }
 
 
 ////////////////////////////////////////////////////////////
-SoundSource& SoundSource::operator=(const SoundSource& right)
+SoundSource& SoundSource::operator =(const SoundSource& right)
 {
+    // Leave m_source untouched -- it's not necessary to destroy and
+    // recreate the OpenAL sound source, hence no copy-and-swap idiom
+
     // Assign the sound attributes
     setPitch(right.getPitch());
-    setPan(right.getPan());
     setVolume(right.getVolume());
-    setSpatializationEnabled(right.isSpatializationEnabled());
     setPosition(right.getPosition());
-    setDirection(right.getDirection());
-    setCone(right.getCone());
-    setVelocity(right.getVelocity());
-    setDopplerFactor(right.getDopplerFactor());
     setRelativeToListener(right.isRelativeToListener());
     setMinDistance(right.getMinDistance());
-    setMaxDistance(right.getMaxDistance());
-    setMinGain(right.getMinGain());
-    setMaxGain(right.getMaxGain());
     setAttenuation(right.getAttenuation());
 
     return *this;
 }
-// NOLINTEND(readability-make-member-function-const)
+
+
+////////////////////////////////////////////////////////////
+SoundSource::Status SoundSource::getStatus() const
+{
+    ALint status;
+    alCheck(alGetSourcei(m_source, AL_SOURCE_STATE, &status));
+
+    switch (status)
+    {
+        case AL_INITIAL:
+        case AL_STOPPED: return Stopped;
+        case AL_PAUSED:  return Paused;
+        case AL_PLAYING: return Playing;
+    }
+
+    return Stopped;
+}
 
 } // namespace sf

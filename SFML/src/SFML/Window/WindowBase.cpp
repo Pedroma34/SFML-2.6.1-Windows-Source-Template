@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,59 +25,46 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Window/ContextSettings.hpp>
-#include <SFML/Window/Cursor.hpp>
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/VideoMode.hpp>
-#include <SFML/Window/Vulkan.hpp>
 #include <SFML/Window/WindowBase.hpp>
-#include <SFML/Window/WindowEnums.hpp>
-#include <SFML/Window/WindowHandle.hpp>
+#include <SFML/Window/ContextSettings.hpp>
 #include <SFML/Window/WindowImpl.hpp>
-
 #include <SFML/System/Err.hpp>
-
-#include <algorithm>
-#include <limits>
-#include <ostream>
-#include <vector>
-
-#include <cassert>
-#include <cstdlib>
 
 
 namespace
 {
-// A nested named namespace is used here to allow unity builds of SFML.
-namespace WindowsBaseImpl
-{
-const sf::WindowBase* fullscreenWindow = nullptr;
-} // namespace WindowsBaseImpl
-} // namespace
+    // A nested named namespace is used here to allow unity builds of SFML.
+    namespace WindowsBaseImpl
+    {
+        const sf::WindowBase* fullscreenWindow = NULL;
+    }
+}
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-WindowBase::WindowBase() = default;
-
-
-////////////////////////////////////////////////////////////
-WindowBase::WindowBase(VideoMode mode, const String& title, std::uint32_t style, State state)
+WindowBase::WindowBase() :
+m_impl          (NULL),
+m_size          (0, 0)
 {
-    WindowBase::create(mode, title, style, state);
+
 }
 
 
 ////////////////////////////////////////////////////////////
-WindowBase::WindowBase(VideoMode mode, const String& title, State state)
+WindowBase::WindowBase(VideoMode mode, const String& title, Uint32 style) :
+m_impl          (NULL),
+m_size          (0, 0)
 {
-    WindowBase::create(mode, title, Style::Default, state);
+    WindowBase::create(mode, title, style);
 }
 
 
 ////////////////////////////////////////////////////////////
-WindowBase::WindowBase(WindowHandle handle)
+WindowBase::WindowBase(WindowHandle handle) :
+m_impl          (NULL),
+m_size          (0, 0)
 {
     WindowBase::create(handle);
 }
@@ -86,27 +73,52 @@ WindowBase::WindowBase(WindowHandle handle)
 ////////////////////////////////////////////////////////////
 WindowBase::~WindowBase()
 {
-    WindowBase::close();
+    close();
 }
 
 
 ////////////////////////////////////////////////////////////
-void WindowBase::create(VideoMode mode, const String& title, std::uint32_t style, State state)
+void WindowBase::create(VideoMode mode, const String& title, Uint32 style)
 {
-    WindowBase::create(mode, style, state);
+    // Destroy the previous window implementation
+    close();
+
+    // Fullscreen style requires some tests
+    if (style & Style::Fullscreen)
+    {
+        // Make sure there's not already a fullscreen window (only one is allowed)
+        if (getFullscreenWindow())
+        {
+            err() << "Creating two fullscreen windows is not allowed, switching to windowed mode" << std::endl;
+            style &= ~static_cast<Uint32>(Style::Fullscreen);
+        }
+        else
+        {
+            // Make sure that the chosen video mode is compatible
+            if (!mode.isValid())
+            {
+                err() << "The requested video mode is not available, switching to a valid mode" << std::endl;
+                mode = VideoMode::getFullscreenModes()[0];
+            }
+
+            // Update the fullscreen window
+            setFullscreenWindow(this);
+        }
+    }
+
+    // Check validity of style according to the underlying platform
+    #if defined(SFML_SYSTEM_IOS) || defined(SFML_SYSTEM_ANDROID)
+        if (style & Style::Fullscreen)
+            style &= ~static_cast<Uint32>(Style::Titlebar);
+        else
+            style |= Style::Titlebar;
+    #else
+        if ((style & Style::Close) || (style & Style::Resize))
+            style |= Style::Titlebar;
+    #endif
 
     // Recreate the window implementation
-    m_impl = priv::WindowImpl::create(mode,
-                                      title,
-                                      style,
-                                      state,
-                                      ContextSettings{/* depthBits */ 0,
-                                                      /* stencilBits */ 0,
-                                                      /* antialiasingLevel */ 0,
-                                                      /* majorVersion */ 0,
-                                                      /* minorVersion */ 0,
-                                                      /* attributeFlags */ 0xFFFFFFFF,
-                                                      /* sRgbCapable */ false});
+    m_impl = priv::WindowImpl::create(mode, title, style, ContextSettings(0, 0, 0, 0, 0, 0xFFFFFFFF, false));
 
     // Perform common initializations
     initialize();
@@ -131,52 +143,47 @@ void WindowBase::create(WindowHandle handle)
 void WindowBase::close()
 {
     // Delete the window implementation
-    m_impl.reset();
+    delete m_impl;
+    m_impl = NULL;
 
     // Update the fullscreen window
     if (this == getFullscreenWindow())
-        setFullscreenWindow(nullptr);
+        setFullscreenWindow(NULL);
 }
 
 
 ////////////////////////////////////////////////////////////
 bool WindowBase::isOpen() const
 {
-    return m_impl != nullptr;
+    return m_impl != NULL;
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<Event> WindowBase::pollEvent()
+bool WindowBase::pollEvent(Event& event)
 {
-    std::optional<sf::Event> event; // Use a single local variable for NRVO
-
-    if (m_impl == nullptr)
-        return event; // Empty optional
-
-    event = m_impl->pollEvent();
-
-    if (event.has_value())
-        filterEvent(*event);
-
-    return event;
+    if (m_impl && m_impl->popEvent(event, false))
+    {
+        return filterEvent(event);
+    }
+    else
+    {
+        return false;
+    }
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<Event> WindowBase::waitEvent(Time timeout)
+bool WindowBase::waitEvent(Event& event)
 {
-    std::optional<sf::Event> event; // Use a single local variable for NRVO
-
-    if (m_impl == nullptr)
-        return event; // Empty optional
-
-    event = m_impl->waitEvent(timeout);
-
-    if (event.has_value())
-        filterEvent(*event);
-
-    return event;
+    if (m_impl && m_impl->popEvent(event, true))
+    {
+        return filterEvent(event);
+    }
+    else
+    {
+        return false;
+    }
 }
 
 
@@ -207,63 +214,14 @@ void WindowBase::setSize(const Vector2u& size)
 {
     if (m_impl)
     {
-        // Constrain requested size within minimum and maximum bounds
-        const auto minimumSize = m_impl->getMinimumSize().value_or(Vector2u());
-        const auto maximumSize = m_impl->getMaximumSize().value_or(
-            Vector2u(std::numeric_limits<unsigned int>::max(), std::numeric_limits<unsigned int>::max()));
-        const auto width  = std::clamp(size.x, minimumSize.x, maximumSize.x);
-        const auto height = std::clamp(size.y, minimumSize.y, maximumSize.y);
-
-        // Do nothing if requested size matches current size
-        const Vector2u clampedSize(width, height);
-        if (clampedSize == m_size)
-            return;
-
-        m_impl->setSize(clampedSize);
+        m_impl->setSize(size);
 
         // Cache the new size
-        m_size = clampedSize;
+        m_size.x = size.x;
+        m_size.y = size.y;
 
         // Notify the derived class
         onResize();
-    }
-}
-
-
-////////////////////////////////////////////////////////////
-void WindowBase::setMinimumSize(const std::optional<Vector2u>& minimumSize)
-{
-    if (m_impl)
-    {
-        [[maybe_unused]] const auto validateMinimumSize = [this, minimumSize]
-        {
-            if (!minimumSize.has_value() || !m_impl->getMaximumSize().has_value())
-                return true;
-            return minimumSize->x <= m_impl->getMaximumSize()->x && minimumSize->y <= m_impl->getMaximumSize()->y;
-        };
-        assert(validateMinimumSize() && "Minimum size cannot be bigger than the maximum size along either axis");
-
-        m_impl->setMinimumSize(minimumSize);
-        setSize(getSize());
-    }
-}
-
-
-////////////////////////////////////////////////////////////
-void WindowBase::setMaximumSize(const std::optional<Vector2u>& maximumSize)
-{
-    if (m_impl)
-    {
-        [[maybe_unused]] const auto validateMaxiumSize = [this, maximumSize]
-        {
-            if (!maximumSize.has_value() || !m_impl->getMinimumSize().has_value())
-                return true;
-            return maximumSize->x >= m_impl->getMinimumSize()->x && maximumSize->y >= m_impl->getMinimumSize()->y;
-        };
-        assert(validateMaxiumSize() && "Maximum size cannot be smaller than the minimum size along either axis");
-
-        m_impl->setMaximumSize(maximumSize);
-        setSize(getSize());
     }
 }
 
@@ -277,10 +235,10 @@ void WindowBase::setTitle(const String& title)
 
 
 ////////////////////////////////////////////////////////////
-void WindowBase::setIcon(const Vector2u& size, const std::uint8_t* pixels)
+void WindowBase::setIcon(unsigned int width, unsigned int height, const Uint8* pixels)
 {
     if (m_impl)
-        m_impl->setIcon(size, pixels);
+        m_impl->setIcon(width, height, pixels);
 }
 
 
@@ -348,9 +306,9 @@ bool WindowBase::hasFocus() const
 
 
 ////////////////////////////////////////////////////////////
-WindowHandle WindowBase::getNativeHandle() const
+WindowHandle WindowBase::getSystemHandle() const
 {
-    return m_impl ? m_impl->getNativeHandle() : WindowHandle{};
+    return m_impl ? m_impl->getSystemHandle() : 0;
 }
 
 
@@ -376,62 +334,20 @@ void WindowBase::onResize()
 
 
 ////////////////////////////////////////////////////////////
-void WindowBase::create(VideoMode mode, std::uint32_t& style, State& state)
-{
-    // Destroy the previous window implementation
-    close();
-
-    // Fullscreen style requires some tests
-    if (state == State::Fullscreen)
-    {
-        // Make sure there's not already a fullscreen window (only one is allowed)
-        if (getFullscreenWindow())
-        {
-            err() << "Creating two fullscreen windows is not allowed, switching to windowed mode" << std::endl;
-            state = State::Windowed;
-        }
-        else
-        {
-            // Make sure that the chosen video mode is compatible
-            if (!mode.isValid())
-            {
-                err() << "The requested video mode is not available, switching to a valid mode" << std::endl;
-                assert(!VideoMode::getFullscreenModes().empty() && "No video modes available");
-                mode = VideoMode::getFullscreenModes()[0];
-                err() << "  VideoMode: { size: { " << mode.size.x << ", " << mode.size.y
-                      << " }, bitsPerPixel: " << mode.bitsPerPixel << " }" << std::endl;
-            }
-
-            // Update the fullscreen window
-            setFullscreenWindow(this);
-        }
-    }
-
-// Check validity of style according to the underlying platform
-#if defined(SFML_SYSTEM_IOS) || defined(SFML_SYSTEM_ANDROID)
-    if (state == State::Fullscreen)
-        style &= ~static_cast<std::uint32_t>(Style::Titlebar);
-    else
-        style |= Style::Titlebar;
-#else
-    if ((style & Style::Close) || (style & Style::Resize))
-        style |= Style::Titlebar;
-#endif
-}
-
-
-////////////////////////////////////////////////////////////
-void WindowBase::filterEvent(const Event& event)
+bool WindowBase::filterEvent(const Event& event)
 {
     // Notify resize events to the derived class
-    if (const auto* resized = event.getIf<Event::Resized>())
+    if (event.type == Event::Resized)
     {
         // Cache the new size
-        m_size = resized->size;
+        m_size.x = event.size.width;
+        m_size.y = event.size.height;
 
         // Notify the derived class
         onResize();
     }
+
+    return true;
 }
 
 

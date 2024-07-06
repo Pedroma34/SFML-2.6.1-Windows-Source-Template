@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -27,140 +27,120 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/System/FileInputStream.hpp>
 #ifdef SFML_SYSTEM_ANDROID
-#include <SFML/System/Android/Activity.hpp>
 #include <SFML/System/Android/ResourceStream.hpp>
 #endif
-#include <memory>
 
-#include <cassert>
-#include <cstddef>
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-void FileInputStream::FileCloser::operator()(std::FILE* file)
+FileInputStream::FileInputStream()
+: m_file(NULL)
 {
-    std::fclose(file);
+
 }
 
 
 ////////////////////////////////////////////////////////////
-FileInputStream::~FileInputStream() = default;
-
-
-////////////////////////////////////////////////////////////
-FileInputStream::FileInputStream(FileInputStream&&) noexcept = default;
-
-
-////////////////////////////////////////////////////////////
-FileInputStream& FileInputStream::operator=(FileInputStream&&) noexcept = default;
-
-
-////////////////////////////////////////////////////////////
-std::optional<FileInputStream> FileInputStream::open(const std::filesystem::path& filename)
+FileInputStream::~FileInputStream()
 {
 #ifdef SFML_SYSTEM_ANDROID
-    if (priv::getActivityStatesPtr() != nullptr)
-    {
-        auto androidFile = std::make_unique<priv::ResourceStream>(filename);
-        if (androidFile->tell().has_value())
-            return FileInputStream(std::move(androidFile));
-        return std::nullopt;
-    }
-#endif
-#ifdef SFML_SYSTEM_WINDOWS
-    if (auto file = std::unique_ptr<std::FILE, FileCloser>(_wfopen(filename.c_str(), L"rb")))
+    if (m_file)
+        delete m_file;
 #else
-    if (auto file = std::unique_ptr<std::FILE, FileCloser>(std::fopen(filename.c_str(), "rb")))
+    if (m_file)
+        std::fclose(m_file);
 #endif
-        return FileInputStream(std::move(file));
-    return std::nullopt;
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<std::size_t> FileInputStream::read(void* data, std::size_t size)
+bool FileInputStream::open(const std::string& filename)
 {
 #ifdef SFML_SYSTEM_ANDROID
-    if (priv::getActivityStatesPtr() != nullptr)
+    if (m_file)
+        delete m_file;
+    m_file = new priv::ResourceStream(filename);
+    return m_file->tell() != -1;
+#else
+    if (m_file)
+        std::fclose(m_file);
+
+    m_file = std::fopen(filename.c_str(), "rb");
+
+    return m_file != NULL;
+#endif
+}
+
+
+////////////////////////////////////////////////////////////
+Int64 FileInputStream::read(void* data, Int64 size)
+{
+#ifdef SFML_SYSTEM_ANDROID
+    return m_file->read(data, size);
+#else
+    if (m_file)
+        return static_cast<Int64>(std::fread(data, 1, static_cast<std::size_t>(size), m_file));
+    else
+        return -1;
+#endif
+}
+
+
+////////////////////////////////////////////////////////////
+Int64 FileInputStream::seek(Int64 position)
+{
+#ifdef SFML_SYSTEM_ANDROID
+    return m_file->seek(position);
+#else
+    if (m_file)
     {
-        assert(m_androidFile);
-        return m_androidFile->read(data, size);
+        if (std::fseek(m_file, static_cast<long>(position), SEEK_SET))
+            return -1;
+
+        return tell();
+    }
+    else
+    {
+        return -1;
     }
 #endif
-    assert(m_file);
-    return std::fread(data, 1, size, m_file.get());
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<std::size_t> FileInputStream::seek(std::size_t position)
+Int64 FileInputStream::tell()
 {
 #ifdef SFML_SYSTEM_ANDROID
-    if (priv::getActivityStatesPtr() != nullptr)
+    return m_file->tell();
+#else
+    if (m_file)
+        return std::ftell(m_file);
+    else
+        return -1;
+#endif
+}
+
+
+////////////////////////////////////////////////////////////
+Int64 FileInputStream::getSize()
+{
+#ifdef SFML_SYSTEM_ANDROID
+    return m_file->getSize();
+#else
+    if (m_file)
     {
-        assert(m_androidFile);
-        return m_androidFile->seek(position);
+        Int64 position = tell();
+        std::fseek(m_file, 0, SEEK_END);
+        Int64 size = tell();
+        seek(position);
+        return size;
+    }
+    else
+    {
+        return -1;
     }
 #endif
-    assert(m_file);
-    if (std::fseek(m_file.get(), static_cast<long>(position), SEEK_SET))
-        return std::nullopt;
-
-    return tell();
 }
-
-
-////////////////////////////////////////////////////////////
-std::optional<std::size_t> FileInputStream::tell()
-{
-#ifdef SFML_SYSTEM_ANDROID
-    if (priv::getActivityStatesPtr() != nullptr)
-    {
-        assert(m_androidFile);
-        return m_androidFile->tell();
-    }
-#endif
-    assert(m_file);
-    const auto position = std::ftell(m_file.get());
-    return position < 0 ? std::nullopt : std::optional<std::size_t>(position);
-}
-
-
-////////////////////////////////////////////////////////////
-std::optional<std::size_t> FileInputStream::getSize()
-{
-#ifdef SFML_SYSTEM_ANDROID
-    if (priv::getActivityStatesPtr() != nullptr)
-    {
-        assert(m_androidFile);
-        return m_androidFile->getSize();
-    }
-#endif
-    assert(m_file);
-    const auto position = tell().value();
-    std::fseek(m_file.get(), 0, SEEK_END);
-    const std::optional size = tell();
-
-    if (!seek(position).has_value())
-        return std::nullopt;
-
-    return size;
-}
-
-
-////////////////////////////////////////////////////////////
-FileInputStream::FileInputStream(std::unique_ptr<std::FILE, FileCloser>&& file) : m_file(std::move(file))
-{
-}
-
-
-////////////////////////////////////////////////////////////
-#ifdef SFML_SYSTEM_ANDROID
-FileInputStream::FileInputStream(std::unique_ptr<priv::ResourceStream>&& androidFile) :
-m_androidFile(std::move(androidFile))
-{
-}
-#endif
 
 } // namespace sf

@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,40 +22,31 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_WINDOWIMPL_HPP
+#define SFML_WINDOWIMPL_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Config.hpp>
-
+#include <SFML/System/NonCopyable.hpp>
+#include <SFML/System/String.hpp>
 #include <SFML/Window/ContextSettings.hpp>
 #include <SFML/Window/CursorImpl.hpp>
 #include <SFML/Window/Event.hpp>
 #include <SFML/Window/Joystick.hpp>
+#include <SFML/Window/JoystickImpl.hpp>
 #include <SFML/Window/Sensor.hpp>
 #include <SFML/Window/SensorImpl.hpp>
 #include <SFML/Window/VideoMode.hpp>
-#include <SFML/Window/Vulkan.hpp>
-#include <SFML/Window/WindowEnums.hpp>
 #include <SFML/Window/WindowHandle.hpp>
-
-#include <SFML/System/EnumArray.hpp>
-#include <SFML/System/Vector2.hpp>
-#include <SFML/System/Vector3.hpp>
-
-#include <array>
-#include <memory>
-#include <optional>
+#include <SFML/Window/Window.hpp>
 #include <queue>
-
-#include <cstdint>
-
+#include <set>
 
 namespace sf
 {
-class String;
-class Time;
+class WindowListener;
 
 namespace priv
 {
@@ -63,54 +54,40 @@ namespace priv
 /// \brief Abstract base class for OS-specific window implementation
 ///
 ////////////////////////////////////////////////////////////
-class WindowImpl
+class WindowImpl : NonCopyable
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Create a new window depending on the current OS
     ///
     /// \param mode  Video mode to use
     /// \param title Title of the window
     /// \param style Window style
-    /// \param state Window state
     /// \param settings Additional settings for the underlying OpenGL context
     ///
-    /// \return Pointer to the created window
+    /// \return Pointer to the created window (don't forget to delete it)
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<WindowImpl> create(VideoMode              mode,
-                                              const String&          title,
-                                              std::uint32_t          style,
-                                              State                  state,
-                                              const ContextSettings& settings);
+    static WindowImpl* create(VideoMode mode, const String& title, Uint32 style, const ContextSettings& settings);
 
     ////////////////////////////////////////////////////////////
     /// \brief Create a new window depending on to the current OS
     ///
     /// \param handle Platform-specific handle of the control
     ///
-    /// \return Pointer to the created window
+    /// \return Pointer to the created window (don't forget to delete it)
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<WindowImpl> create(WindowHandle handle);
+    static WindowImpl* create(WindowHandle handle);
+
+public:
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
     virtual ~WindowImpl();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy constructor
-    ///
-    ////////////////////////////////////////////////////////////
-    WindowImpl(const WindowImpl&) = delete;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Deleted copy assignment
-    ///
-    ////////////////////////////////////////////////////////////
-    WindowImpl& operator=(const WindowImpl&) = delete;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the joystick threshold, i.e. the value below which
@@ -122,28 +99,20 @@ public:
     void setJoystickThreshold(float threshold);
 
     ////////////////////////////////////////////////////////////
-    /// \brief Wait for and return the next available window event
+    /// \brief Return the next window event available
     ///
     /// If there's no event available, this function calls the
     /// window's internal event processing function.
+    /// The \a block parameter controls the behavior of the function
+    /// if no event is available: if it is true then the function
+    /// doesn't return until a new event is triggered; otherwise it
+    /// returns false to indicate that no event is available.
     ///
-    /// \param timeout Maximum time to wait (`Time::Zero` for infinite)
-    ///
-    /// \return The event on success, `std::nullopt` otherwise
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] std::optional<Event> waitEvent(Time timeout);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Return the next window event, if available
-    ///
-    /// If there's no event available, this function calls the
-    /// window's internal event processing function.
-    ///
-    /// \return The event if available, `std::nullopt` otherwise
+    /// \param event Event to be returned
+    /// \param block Use true to block the thread until an event arrives
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] std::optional<Event> pollEvent();
+    bool popEvent(Event& event, bool block);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the OS-specific handle of the window
@@ -151,7 +120,7 @@ public:
     /// \return Handle of the window
     ///
     ////////////////////////////////////////////////////////////
-    virtual WindowHandle getNativeHandle() const = 0;
+    virtual WindowHandle getSystemHandle() const = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the position of the window
@@ -160,22 +129,6 @@ public:
     ///
     ////////////////////////////////////////////////////////////
     virtual Vector2i getPosition() const = 0;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the minimum window rendering region size
-    ///
-    /// \return Minimum size
-    ///
-    ////////////////////////////////////////////////////////////
-    std::optional<Vector2u> getMinimumSize() const;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the maximum window rendering region size
-    ///
-    /// \return Maximum size
-    ///
-    ////////////////////////////////////////////////////////////
-    std::optional<Vector2u> getMaximumSize() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the position of the window on screen
@@ -202,26 +155,6 @@ public:
     virtual void setSize(const Vector2u& size) = 0;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Set the minimum window rendering region size
-    ///
-    /// Pass std::nullopt to unset the minimum size
-    ///
-    /// \param minimumSize New minimum size, in pixels
-    ///
-    ////////////////////////////////////////////////////////////
-    virtual void setMinimumSize(const std::optional<Vector2u>& minimumSize);
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Set the maximum window rendering region size
-    ///
-    /// Pass std::nullopt to unset the maximum size
-    ///
-    /// \param maximumSize New maximum size, in pixels
-    ///
-    ////////////////////////////////////////////////////////////
-    virtual void setMaximumSize(const std::optional<Vector2u>& maximumSize);
-
-    ////////////////////////////////////////////////////////////
     /// \brief Change the title of the window
     ///
     /// \param title New title
@@ -232,11 +165,12 @@ public:
     ////////////////////////////////////////////////////////////
     /// \brief Change the window's icon
     ///
-    /// \param size   Icon's width and height, in pixels
+    /// \param width  Icon's width, in pixels
+    /// \param height Icon's height, in pixels
     /// \param pixels Pointer to the pixels in memory, format must be RGBA 32 bits
     ///
     ////////////////////////////////////////////////////////////
-    virtual void setIcon(const Vector2u& size, const std::uint8_t* pixels) = 0;
+    virtual void setIcon(unsigned int width, unsigned int height, const Uint8* pixels) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Show or hide the window
@@ -303,9 +237,10 @@ public:
     /// \return True if surface creation was successful, false otherwise
     ///
     ////////////////////////////////////////////////////////////
-    bool createVulkanSurface(const VkInstance& instance, VkSurfaceKHR& surface, const VkAllocationCallbacks* allocator) const;
+    bool createVulkanSurface(const VkInstance& instance, VkSurfaceKHR& surface, const VkAllocationCallbacks* allocator);
 
 protected:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
@@ -331,13 +266,6 @@ protected:
     virtual void processEvents() = 0;
 
 private:
-    struct JoystickStatesImpl;
-
-    ////////////////////////////////////////////////////////////
-    /// \return First event of the queue if available, `std::nullopt` otherwise
-    ///
-    ////////////////////////////////////////////////////////////
-    [[nodiscard]] std::optional<Event> popEvent();
 
     ////////////////////////////////////////////////////////////
     /// \brief Read the joysticks state and generate the appropriate events
@@ -352,24 +280,18 @@ private:
     void processSensorEvents();
 
     ////////////////////////////////////////////////////////////
-    /// \brief Read joystick, sensors, and OS state and populate event queue
-    ///
-    ////////////////////////////////////////////////////////////
-    void populateEventQueue();
-
-    ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::queue<Event>                                m_events;             //!< Queue of available events
-    std::unique_ptr<JoystickStatesImpl>              m_joystickStatesImpl; //!< Previous state of the joysticks (PImpl)
-    EnumArray<Sensor::Type, Vector3f, Sensor::Count> m_sensorValue;        //!< Previous value of the sensors
-    float m_joystickThreshold{0.1f}; //!< Joystick threshold (minimum motion for "move" event to be generated)
-    std::array<EnumArray<Joystick::Axis, float, Joystick::AxisCount>, Joystick::Count>
-        m_previousAxes{}; //!< Position of each axis last time a move event triggered, in range [-100, 100]
-    std::optional<Vector2u> m_minimumSize; //!< Minimum window size
-    std::optional<Vector2u> m_maximumSize; //!< Maximum window size
+    std::queue<Event> m_events;                                              //!< Queue of available events
+    JoystickState     m_joystickStates[Joystick::Count];                     //!< Previous state of the joysticks
+    Vector3f          m_sensorValue[Sensor::Count];                          //!< Previous value of the sensors
+    float             m_joystickThreshold;                                   //!< Joystick threshold (minimum motion for "move" event to be generated)
+    float             m_previousAxes[Joystick::Count][Joystick::AxisCount];  //!< Position of each axis last time a move event triggered, in range [-100, 100]
 };
 
 } // namespace priv
 
 } // namespace sf
+
+
+#endif // SFML_WINDOWIMPL_HPP

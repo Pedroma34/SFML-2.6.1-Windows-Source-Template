@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,37 +22,33 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_GLCHECK_HPP
+#define SFML_GLCHECK_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Config.hpp>
-
-#include <filesystem>
-#include <string_view>
+#include <SFML/Graphics/GLExtensions.hpp>
 
 
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 /// Let's define a macro to quickly check every OpenGL API call
 ////////////////////////////////////////////////////////////
 #ifdef SFML_DEBUG
 
-// In debug mode, perform a test on every OpenGL call
-// The do-while loop is needed so that glCheck can be used as a single statement in if/else branches
-#define glCheck(expr)                                      \
-    do                                                     \
-    {                                                      \
-        expr;                                              \
-        sf::priv::glCheckError(__FILE__, __LINE__, #expr); \
-    } while (false)
+    // In debug mode, perform a test on every OpenGL call
+    // The do-while loop is needed so that glCheck can be used as a single statement in if/else branches
+    #define glCheck(expr) do { expr; sf::priv::glCheckError(__FILE__, __LINE__, #expr); } while (false)
 
 #else
 
-// Else, we don't add any overhead
-#define glCheck(expr) (expr)
+    // Else, we don't add any overhead
+    #define glCheck(expr) (expr)
 
 #endif
 
@@ -64,6 +60,11 @@ namespace sf::priv
 /// \param expression The evaluated expression as a string
 ///
 ////////////////////////////////////////////////////////////
-void glCheckError(const std::filesystem::path& file, unsigned int line, std::string_view expression);
+void glCheckError(const char* file, unsigned int line, const char* expression);
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_GLCHECK_HPP

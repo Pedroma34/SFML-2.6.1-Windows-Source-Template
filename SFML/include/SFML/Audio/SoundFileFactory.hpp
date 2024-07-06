@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,18 +22,15 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_SOUNDFILEFACTORY_HPP
+#define SFML_SOUNDFILEFACTORY_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/Export.hpp>
-
-#include <filesystem>
-#include <memory>
-#include <unordered_map>
-
-#include <cstddef>
+#include <string>
+#include <vector>
 
 
 namespace sf
@@ -49,6 +46,7 @@ class SoundFileWriter;
 class SFML_AUDIO_API SoundFileFactory
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Register a new reader
     ///
@@ -66,13 +64,6 @@ public:
     ////////////////////////////////////////////////////////////
     template <typename T>
     static void unregisterReader();
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Check if a reader is registered
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename T>
-    static bool isReaderRegistered();
 
     ////////////////////////////////////////////////////////////
     /// \brief Register a new writer
@@ -93,14 +84,9 @@ public:
     static void unregisterWriter();
 
     ////////////////////////////////////////////////////////////
-    /// \brief Check if a writer is registered
-    ///
-    ////////////////////////////////////////////////////////////
-    template <typename T>
-    static bool isWriterRegistered();
-
-    ////////////////////////////////////////////////////////////
     /// \brief Instantiate the right reader for the given file on disk
+    ///
+    /// It's up to the caller to release the returned reader
     ///
     /// \param filename Path of the sound file
     ///
@@ -109,10 +95,12 @@ public:
     /// \see createReaderFromMemory, createReaderFromStream
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<SoundFileReader> createReaderFromFilename(const std::filesystem::path& filename);
+    static SoundFileReader* createReaderFromFilename(const std::string& filename);
 
     ////////////////////////////////////////////////////////////
     /// \brief Instantiate the right codec for the given file in memory
+    ///
+    /// It's up to the caller to release the returned reader
     ///
     /// \param data        Pointer to the file data in memory
     /// \param sizeInBytes Total size of the file data, in bytes
@@ -122,10 +110,12 @@ public:
     /// \see createReaderFromFilename, createReaderFromStream
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<SoundFileReader> createReaderFromMemory(const void* data, std::size_t sizeInBytes);
+    static SoundFileReader* createReaderFromMemory(const void* data, std::size_t sizeInBytes);
 
     ////////////////////////////////////////////////////////////
     /// \brief Instantiate the right codec for the given file in stream
+    ///
+    /// It's up to the caller to release the returned reader
     ///
     /// \param stream Source stream to read from
     ///
@@ -134,41 +124,51 @@ public:
     /// \see createReaderFromFilename, createReaderFromMemory
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<SoundFileReader> createReaderFromStream(InputStream& stream);
+    static SoundFileReader* createReaderFromStream(InputStream& stream);
 
     ////////////////////////////////////////////////////////////
     /// \brief Instantiate the right writer for the given file on disk
+    ///
+    /// It's up to the caller to release the returned writer
     ///
     /// \param filename Path of the sound file
     ///
     /// \return A new sound file writer that can write given file, or null if no writer can handle it
     ///
     ////////////////////////////////////////////////////////////
-    static std::unique_ptr<SoundFileWriter> createWriterFromFilename(const std::filesystem::path& filename);
+    static SoundFileWriter* createWriterFromFilename(const std::string& filename);
 
 private:
+
     ////////////////////////////////////////////////////////////
     // Types
     ////////////////////////////////////////////////////////////
-    template <typename T>
-    using CreateFnPtr = std::unique_ptr<T> (*)();
+    struct ReaderFactory
+    {
+        bool (*check)(InputStream&);
+        SoundFileReader* (*create)();
+    };
+    typedef std::vector<ReaderFactory> ReaderFactoryArray;
 
-    using ReaderCheckFnPtr = bool (*)(InputStream&);
-    using WriterCheckFnPtr = bool (*)(const std::filesystem::path&);
-
-    using ReaderFactoryMap = std::unordered_map<CreateFnPtr<SoundFileReader>, ReaderCheckFnPtr>;
-    using WriterFactoryMap = std::unordered_map<CreateFnPtr<SoundFileWriter>, WriterCheckFnPtr>;
+    struct WriterFactory
+    {
+        bool (*check)(const std::string&);
+        SoundFileWriter* (*create)();
+    };
+    typedef std::vector<WriterFactory> WriterFactoryArray;
 
     ////////////////////////////////////////////////////////////
-    // Static member functions
+    // Static member data
     ////////////////////////////////////////////////////////////
-    static ReaderFactoryMap& getReaderFactoryMap();
-    static WriterFactoryMap& getWriterFactoryMap();
+    static ReaderFactoryArray s_readers; //!< List of all registered readers
+    static WriterFactoryArray s_writers; //!< List of all registered writers
 };
 
 } // namespace sf
 
 #include <SFML/Audio/SoundFileFactory.inl>
+
+#endif // SFML_SOUNDFILEFACTORY_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -189,10 +189,7 @@ private:
 /// Usage example:
 /// \code
 /// sf::SoundFileFactory::registerReader<MySoundFileReader>();
-/// assert(sf::SoundFileFactory::isReaderRegistered<MySoundFileReader>());
-///
 /// sf::SoundFileFactory::registerWriter<MySoundFileWriter>();
-/// assert(sf::SoundFileFactory::isWriterRegistered<MySoundFileWriter>());
 /// \endcode
 ///
 /// \see sf::InputSoundFile, sf::OutputSoundFile, sf::SoundFileReader, sf::SoundFileWriter

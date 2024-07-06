@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,31 +25,30 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Window/GlContext.hpp>
 #include <SFML/Window/GlResource.hpp>
-
-#include <utility>
+#include <SFML/Window/GlContext.hpp>
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-GlResource::GlResource() : m_sharedContext(priv::GlContext::getSharedContext())
+GlResource::GlResource()
 {
+    priv::GlContext::initResource();
 }
 
 
 ////////////////////////////////////////////////////////////
-void GlResource::registerUnsharedGlObject(std::shared_ptr<void> object)
+GlResource::~GlResource()
 {
-    priv::GlContext::registerUnsharedGlObject(std::move(object));
+    priv::GlContext::cleanupResource();
 }
 
 
 ////////////////////////////////////////////////////////////
-void GlResource::unregisterUnsharedGlObject(std::shared_ptr<void> object)
+void GlResource::registerContextDestroyCallback(ContextDestroyCallback callback, void* arg)
 {
-    priv::GlContext::unregisterUnsharedGlObject(std::move(object));
+    priv::GlContext::registerContextDestroyCallback(callback, arg);
 }
 
 

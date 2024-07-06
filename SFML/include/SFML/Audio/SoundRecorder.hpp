@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,21 +22,18 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_SOUNDRECORDER_HPP
+#define SFML_SOUNDRECORDER_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/Export.hpp>
-
-#include <SFML/Audio/SoundChannel.hpp>
-
-#include <memory>
-#include <string>
+#include <SFML/Audio/AlResource.hpp>
+#include <SFML/System/Thread.hpp>
+#include <SFML/System/Time.hpp>
 #include <vector>
-
-#include <cstddef>
-#include <cstdint>
+#include <string>
 
 
 namespace sf
@@ -45,9 +42,10 @@ namespace sf
 /// \brief Abstract base class for capturing sound data
 ///
 ////////////////////////////////////////////////////////////
-class SFML_AUDIO_API SoundRecorder
+class SFML_AUDIO_API SoundRecorder : AlResource
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief destructor
     ///
@@ -63,7 +61,7 @@ public:
     /// This function uses its own thread so that it doesn't block
     /// the rest of the program while the capture runs.
     /// Please note that only one capture can happen at the same time.
-    /// You can select which capture device will be used by passing
+    /// You can select which capture device will be used, by passing
     /// the name to the setDevice() method. If none was selected
     /// before, the default capture device will be used. You can get a
     /// list of the names of all available capture devices by calling
@@ -76,7 +74,7 @@ public:
     /// \see stop, getAvailableDevices
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool start(unsigned int sampleRate = 44100);
+    bool start(unsigned int sampleRate = 44100);
 
     ////////////////////////////////////////////////////////////
     /// \brief Stop the capture
@@ -136,7 +134,7 @@ public:
     /// \see getAvailableDevices, getDefaultDevice
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] bool setDevice(const std::string& name);
+    bool setDevice(const std::string& name);
 
     ////////////////////////////////////////////////////////////
     /// \brief Get the name of the current audio capture device
@@ -175,17 +173,6 @@ public:
     unsigned int getChannelCount() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get the map of position in sample frame to sound channel
-    ///
-    /// This is used to map a sample in the sample stream to a
-    /// position during spatialisation.
-    ///
-    /// \return Map of position in sample frame to sound channel
-    ///
-    ////////////////////////////////////////////////////////////
-    const std::vector<SoundChannel>& getChannelMap() const;
-
-    ////////////////////////////////////////////////////////////
     /// \brief Check if the system supports audio capture
     ///
     /// This function should always be called before using
@@ -199,6 +186,7 @@ public:
     static bool isAvailable();
 
 protected:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
@@ -206,6 +194,24 @@ protected:
     ///
     ////////////////////////////////////////////////////////////
     SoundRecorder();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the processing interval
+    ///
+    /// The processing interval controls the period
+    /// between calls to the onProcessSamples function. You may
+    /// want to use a small interval if you want to process the
+    /// recorded data in real time, for example.
+    ///
+    /// Note: this is only a hint, the actual period may vary.
+    /// So don't rely on this parameter to implement precise timing.
+    ///
+    /// The default processing interval is 100 ms.
+    ///
+    /// \param interval Processing interval
+    ///
+    ////////////////////////////////////////////////////////////
+    void setProcessingInterval(Time interval);
 
     ////////////////////////////////////////////////////////////
     /// \brief Start capturing audio data
@@ -234,7 +240,7 @@ protected:
     /// \return True to continue the capture, or false to stop it
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool onProcessSamples(const std::int16_t* samples, std::size_t sampleCount) = 0;
+    virtual bool onProcessSamples(const Int16* samples, std::size_t sampleCount) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Stop capturing audio data
@@ -248,14 +254,50 @@ protected:
     virtual void onStop();
 
 private:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Function called as the entry point of the thread
+    ///
+    /// This function starts the recording loop, and returns
+    /// only when the capture is stopped.
+    ///
+    ////////////////////////////////////////////////////////////
+    void record();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Get the new available audio samples and process them
+    ///
+    /// This function is called continuously during the
+    /// capture loop. It retrieves the captured samples and
+    /// forwards them to the derived class.
+    ///
+    ////////////////////////////////////////////////////////////
+    void processCapturedSamples();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Clean up the recorder's internal resources
+    ///
+    /// This function is called when the capture stops.
+    ///
+    ////////////////////////////////////////////////////////////
+    void cleanup();
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    struct Impl;
-    const std::unique_ptr<Impl> m_impl; //!< Implementation details
+    Thread             m_thread;             //!< Thread running the background recording task
+    std::vector<Int16> m_samples;            //!< Buffer to store captured samples
+    unsigned int       m_sampleRate;         //!< Sample rate
+    Time               m_processingInterval; //!< Time period between calls to onProcessSamples
+    bool               m_isCapturing;        //!< Capturing state
+    std::string        m_deviceName;         //!< Name of the audio capture device
+    unsigned int       m_channelCount;       //!< Number of recording channels
 };
 
 } // namespace sf
+
+
+#endif // SFML_SOUNDRECORDER_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -325,7 +367,7 @@ private:
 ///     }
 ///
 /// private:
-///     bool onStart() override // optional
+///     virtual bool onStart() // optional
 ///     {
 ///         // Initialize whatever has to be done before the capture starts
 ///         ...
@@ -334,7 +376,7 @@ private:
 ///         return true;
 ///     }
 ///
-///     [[nodiscard]] bool onProcessSamples(const std::int16_t* samples, std::size_t sampleCount) override
+///     virtual bool onProcessSamples(const sf::Int16* samples, std::size_t sampleCount)
 ///     {
 ///         // Do something with the new chunk of samples (store them, send them, ...)
 ///         ...
@@ -343,7 +385,7 @@ private:
 ///         return true;
 ///     }
 ///
-///     void onStop() override // optional
+///     virtual void onStop() // optional
 ///     {
 ///         // Clean up whatever has to be done after the capture ends
 ///         ...

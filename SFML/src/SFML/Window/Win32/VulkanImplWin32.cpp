@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,90 +25,97 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Window/VulkanImpl.hpp>
-
-#include <SFML/System/Win32/WindowsHeader.hpp>
-
-#include <string_view>
-
-#include <cstdint>
-
+#include <SFML/Window/Win32/VulkanImplWin32.hpp>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #define VK_USE_PLATFORM_WIN32_KHR
 #define VK_NO_PROTOTYPES
 #include <vulkan.h>
+#include <string>
+#include <map>
+#include <cstring>
 
 
 namespace
 {
-struct VulkanLibraryWrapper
-{
-    ~VulkanLibraryWrapper()
+    struct VulkanLibraryWrapper
     {
-        if (library)
-            FreeLibrary(library);
-    }
+        VulkanLibraryWrapper() :
+        library(NULL)
+        {
+        }
 
-    // Try to load the library and all the required entry points
-    bool loadLibrary()
-    {
-        if (library)
+        ~VulkanLibraryWrapper()
+        {
+            if (library)
+                FreeLibrary(library);
+        }
+
+        // Try to load the library and all the required entry points
+        bool loadLibrary()
+        {
+            if (library)
+                return true;
+
+            library = LoadLibraryA("vulkan-1.dll");
+
+            if (!library)
+                return false;
+
+            if (!loadEntryPoint(vkGetInstanceProcAddr, "vkGetInstanceProcAddr"))
+            {
+                FreeLibrary(library);
+                library = NULL;
+                return false;
+            }
+
+            if (!loadEntryPoint(vkEnumerateInstanceLayerProperties, "vkEnumerateInstanceLayerProperties"))
+            {
+                FreeLibrary(library);
+                library = NULL;
+                return false;
+            }
+
+            if (!loadEntryPoint(vkEnumerateInstanceExtensionProperties, "vkEnumerateInstanceExtensionProperties"))
+            {
+                FreeLibrary(library);
+                library = NULL;
+                return false;
+            }
+
             return true;
-
-        library = LoadLibraryA("vulkan-1.dll");
-
-        if (!library)
-            return false;
-
-        if (!loadEntryPoint(vkGetInstanceProcAddr, "vkGetInstanceProcAddr"))
-        {
-            FreeLibrary(library);
-            library = nullptr;
-            return false;
         }
 
-        if (!loadEntryPoint(vkEnumerateInstanceLayerProperties, "vkEnumerateInstanceLayerProperties"))
+        template<typename T>
+        bool loadEntryPoint(T& entryPoint, const char* name)
         {
-            FreeLibrary(library);
-            library = nullptr;
-            return false;
+            entryPoint = reinterpret_cast<T>(reinterpret_cast<void*>(GetProcAddress(library, name)));
+
+            return (entryPoint != NULL);
         }
 
-        if (!loadEntryPoint(vkEnumerateInstanceExtensionProperties, "vkEnumerateInstanceExtensionProperties"))
-        {
-            FreeLibrary(library);
-            library = nullptr;
-            return false;
-        }
+        HMODULE library;
 
-        return true;
-    }
+        PFN_vkGetInstanceProcAddr vkGetInstanceProcAddr;
+        PFN_vkEnumerateInstanceLayerProperties vkEnumerateInstanceLayerProperties;
+        PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties;
+    };
 
-    template <typename T>
-    bool loadEntryPoint(T& entryPoint, const char* name)
-    {
-        entryPoint = reinterpret_cast<T>(reinterpret_cast<void*>(GetProcAddress(library, name)));
-
-        return entryPoint != nullptr;
-    }
-
-    HMODULE library{};
-
-    PFN_vkGetInstanceProcAddr                  vkGetInstanceProcAddr{};
-    PFN_vkEnumerateInstanceLayerProperties     vkEnumerateInstanceLayerProperties{};
-    PFN_vkEnumerateInstanceExtensionProperties vkEnumerateInstanceExtensionProperties{};
-};
-
-VulkanLibraryWrapper wrapper;
-} // namespace
+    VulkanLibraryWrapper wrapper;
+}
 
 
-namespace sf::priv
+namespace sf
+{
+namespace priv
 {
 ////////////////////////////////////////////////////////////
-bool VulkanImpl::isAvailable(bool requireGraphics)
+bool VulkanImplWin32::isAvailable(bool requireGraphics)
 {
-    static bool checked           = false;
-    static bool computeAvailable  = false;
+    static bool checked = false;
+    static bool computeAvailable = false;
     static bool graphicsAvailable = false;
 
     if (!checked)
@@ -126,31 +133,31 @@ bool VulkanImpl::isAvailable(bool requireGraphics)
             // Retrieve the available instance extensions
             std::vector<VkExtensionProperties> extensionProperties;
 
-            std::uint32_t extensionCount = 0;
+            uint32_t extensionCount = 0;
 
-            wrapper.vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+            wrapper.vkEnumerateInstanceExtensionProperties(0, &extensionCount, NULL);
 
             extensionProperties.resize(extensionCount);
 
-            wrapper.vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensionProperties.data());
+            wrapper.vkEnumerateInstanceExtensionProperties(0, &extensionCount, &extensionProperties[0]);
 
             // Check if the necessary extensions are available
-            bool hasVkKhrSurface         = false;
-            bool hasVkKhrPlatformSurface = false;
+            bool has_VK_KHR_surface = false;
+            bool has_VK_KHR_platform_surface = false;
 
-            for (const VkExtensionProperties& properties : extensionProperties)
+            for (std::vector<VkExtensionProperties>::const_iterator iter = extensionProperties.begin(); iter != extensionProperties.end(); ++iter)
             {
-                if (std::string_view(properties.extensionName) == VK_KHR_SURFACE_EXTENSION_NAME)
+                if (!std::strcmp(iter->extensionName, VK_KHR_SURFACE_EXTENSION_NAME))
                 {
-                    hasVkKhrSurface = true;
+                    has_VK_KHR_surface = true;
                 }
-                else if (std::string_view(properties.extensionName) == VK_KHR_WIN32_SURFACE_EXTENSION_NAME)
+                else if (!std::strcmp(iter->extensionName, VK_KHR_WIN32_SURFACE_EXTENSION_NAME))
                 {
-                    hasVkKhrPlatformSurface = true;
+                    has_VK_KHR_platform_surface = true;
                 }
             }
 
-            if (!hasVkKhrSurface || !hasVkKhrPlatformSurface)
+            if (!has_VK_KHR_surface || !has_VK_KHR_platform_surface)
                 graphicsAvailable = false;
         }
     }
@@ -163,28 +170,32 @@ bool VulkanImpl::isAvailable(bool requireGraphics)
 
 
 ////////////////////////////////////////////////////////////
-VulkanFunctionPointer VulkanImpl::getFunction(const char* name)
+VulkanFunctionPointer VulkanImplWin32::getFunction(const char* name)
 {
     if (!isAvailable(false))
-        return nullptr;
+        return 0;
 
     return reinterpret_cast<VulkanFunctionPointer>(GetProcAddress(wrapper.library, name));
 }
 
 
 ////////////////////////////////////////////////////////////
-const std::vector<const char*>& VulkanImpl::getGraphicsRequiredInstanceExtensions()
+const std::vector<const char*>& VulkanImplWin32::getGraphicsRequiredInstanceExtensions()
 {
-    static const std::vector<const char*> extensions{VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME};
+    static std::vector<const char*> extensions;
+
+    if (extensions.empty())
+    {
+        extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
+        extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+    }
+
     return extensions;
 }
 
 
 ////////////////////////////////////////////////////////////
-bool VulkanImpl::createVulkanSurface(const VkInstance&            instance,
-                                     WindowHandle                 windowHandle,
-                                     VkSurfaceKHR&                surface,
-                                     const VkAllocationCallbacks* allocator)
+bool VulkanImplWin32::createVulkanSurface(const VkInstance& instance, WindowHandle windowHandle, VkSurfaceKHR& surface, const VkAllocationCallbacks* allocator)
 {
     if (!isAvailable())
         return false;
@@ -192,18 +203,19 @@ bool VulkanImpl::createVulkanSurface(const VkInstance&            instance,
     // Make a copy of the instance handle since we get it passed as a reference
     VkInstance inst = instance;
 
-    auto vkCreateWin32SurfaceKHR = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(
-        wrapper.vkGetInstanceProcAddr(inst, "vkCreateWin32SurfaceKHR"));
+    PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = reinterpret_cast<PFN_vkCreateWin32SurfaceKHR>(wrapper.vkGetInstanceProcAddr(inst, "vkCreateWin32SurfaceKHR"));
 
     if (!vkCreateWin32SurfaceKHR)
         return false;
 
     VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = VkWin32SurfaceCreateInfoKHR();
-    surfaceCreateInfo.sType                       = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    surfaceCreateInfo.hinstance                   = GetModuleHandleA(nullptr);
-    surfaceCreateInfo.hwnd                        = windowHandle;
+    surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    surfaceCreateInfo.hinstance = GetModuleHandleA(NULL);
+    surfaceCreateInfo.hwnd = windowHandle;
 
-    return vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, allocator, &surface) == VK_SUCCESS;
+    return (vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, allocator, &surface) == VK_SUCCESS);
 }
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf

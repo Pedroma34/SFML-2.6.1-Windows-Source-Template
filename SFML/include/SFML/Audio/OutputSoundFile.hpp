@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,33 +22,43 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_OUTPUTSOUNDFILE_HPP
+#define SFML_OUTPUTSOUNDFILE_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/Export.hpp>
-
-#include <SFML/Audio/SoundChannel.hpp>
-#include <SFML/Audio/SoundFileWriter.hpp>
-
-#include <filesystem>
-#include <memory>
-#include <optional>
-#include <vector>
-
-#include <cstdint>
+#include <SFML/System/NonCopyable.hpp>
+#include <string>
 
 
 namespace sf
 {
+class SoundFileWriter;
+
 ////////////////////////////////////////////////////////////
 /// \brief Provide write access to sound files
 ///
 ////////////////////////////////////////////////////////////
-class SFML_AUDIO_API OutputSoundFile
+class SFML_AUDIO_API OutputSoundFile : NonCopyable
 {
 public:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default constructor
+    ///
+    ////////////////////////////////////////////////////////////
+    OutputSoundFile();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Destructor
+    ///
+    /// Closes the file if it was still open.
+    ///
+    ////////////////////////////////////////////////////////////
+    ~OutputSoundFile();
+
     ////////////////////////////////////////////////////////////
     /// \brief Open the sound file from the disk for writing
     ///
@@ -57,16 +67,11 @@ public:
     /// \param filename     Path of the sound file to write
     /// \param sampleRate   Sample rate of the sound
     /// \param channelCount Number of channels in the sound
-    /// \param channelMap   Map of position in sample frame to sound channel
     ///
-    /// \return Output sound file if the file was successfully opened
+    /// \return True if the file was successfully opened
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static std::optional<OutputSoundFile> openFromFile(
-        const std::filesystem::path&     filename,
-        unsigned int                     sampleRate,
-        unsigned int                     channelCount,
-        const std::vector<SoundChannel>& channelMap);
+    bool openFromFile(const std::string& filename, unsigned int sampleRate, unsigned int channelCount);
 
     ////////////////////////////////////////////////////////////
     /// \brief Write audio samples to the file
@@ -75,7 +80,7 @@ public:
     /// \param count       Number of samples to write
     ///
     ////////////////////////////////////////////////////////////
-    void write(const std::int16_t* samples, std::uint64_t count);
+    void write(const Int16* samples, Uint64 count);
 
     ////////////////////////////////////////////////////////////
     /// \brief Close the current file
@@ -84,19 +89,17 @@ public:
     void close();
 
 private:
-    ////////////////////////////////////////////////////////////
-    /// \brief Constructor from writer
-    ///
-    ////////////////////////////////////////////////////////////
-    explicit OutputSoundFile(std::unique_ptr<SoundFileWriter>&& writer);
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    std::unique_ptr<SoundFileWriter> m_writer; //!< Writer that handles I/O on the file's format
+    SoundFileWriter* m_writer; //!< Writer that handles I/O on the file's format
 };
 
 } // namespace sf
+
+
+#endif // SFML_OUTPUTSOUNDFILE_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -111,12 +114,14 @@ private:
 /// Usage example:
 /// \code
 /// // Create a sound file, ogg/vorbis format, 44100 Hz, stereo
-/// auto file = sf::OutputSoundFile::openFromFile("music.ogg", 44100, 2).value();
+/// sf::OutputSoundFile file;
+/// if (!file.openFromFile("music.ogg", 44100, 2))
+///     /* error */;
 ///
 /// while (...)
 /// {
 ///     // Read or generate audio samples from your custom source
-///     std::vector<std::int16_t> samples = ...;
+///     std::vector<sf::Int16> samples = ...;
 ///
 ///     // Write them to the file
 ///     file.write(samples.data(), samples.size());

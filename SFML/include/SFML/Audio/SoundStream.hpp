@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,24 +22,18 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_SOUNDSTREAM_HPP
+#define SFML_SOUNDSTREAM_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/Export.hpp>
-
-#include <SFML/Audio/SoundChannel.hpp>
 #include <SFML/Audio/SoundSource.hpp>
-
+#include <SFML/System/Thread.hpp>
 #include <SFML/System/Time.hpp>
-
-#include <memory>
-#include <optional>
-#include <vector>
-
-#include <cstddef>
-#include <cstdint>
+#include <SFML/System/Mutex.hpp>
+#include <cstdlib>
 
 
 namespace sf
@@ -51,33 +45,22 @@ namespace sf
 class SFML_AUDIO_API SoundStream : public SoundSource
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Structure defining a chunk of audio data to stream
     ///
     ////////////////////////////////////////////////////////////
     struct Chunk
     {
-        const std::int16_t* samples{};     //!< Pointer to the audio samples
-        std::size_t         sampleCount{}; //!< Number of samples pointed by Samples
+        const Int16* samples;     //!< Pointer to the audio samples
+        std::size_t  sampleCount; //!< Number of samples pointed by Samples
     };
 
     ////////////////////////////////////////////////////////////
     /// \brief Destructor
     ///
     ////////////////////////////////////////////////////////////
-    ~SoundStream() override;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Move constructor
-    ///
-    ////////////////////////////////////////////////////////////
-    SoundStream(SoundStream&&) noexcept;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Move assignment
-    ///
-    ////////////////////////////////////////////////////////////
-    SoundStream& operator=(SoundStream&&) noexcept;
+    virtual ~SoundStream();
 
     ////////////////////////////////////////////////////////////
     /// \brief Start or resume playing the audio stream
@@ -91,7 +74,7 @@ public:
     /// \see pause, stop
     ///
     ////////////////////////////////////////////////////////////
-    void play() override;
+    void play();
 
     ////////////////////////////////////////////////////////////
     /// \brief Pause the audio stream
@@ -102,7 +85,7 @@ public:
     /// \see play, stop
     ///
     ////////////////////////////////////////////////////////////
-    void pause() override;
+    void pause();
 
     ////////////////////////////////////////////////////////////
     /// \brief Stop playing the audio stream
@@ -114,7 +97,7 @@ public:
     /// \see play, pause
     ///
     ////////////////////////////////////////////////////////////
-    void stop() override;
+    void stop();
 
     ////////////////////////////////////////////////////////////
     /// \brief Return the number of channels of the stream
@@ -138,23 +121,12 @@ public:
     unsigned int getSampleRate() const;
 
     ////////////////////////////////////////////////////////////
-    /// \brief Get the map of position in sample frame to sound channel
-    ///
-    /// This is used to map a sample in the sample stream to a
-    /// position during spatialisation.
-    ///
-    /// \return Map of position in sample frame to sound channel
-    ///
-    ////////////////////////////////////////////////////////////
-    std::vector<SoundChannel> getChannelMap() const;
-
-    ////////////////////////////////////////////////////////////
     /// \brief Get the current status of the stream (stopped, paused, playing)
     ///
     /// \return Current status
     ///
     ////////////////////////////////////////////////////////////
-    Status getStatus() const override;
+    Status getStatus() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the current playing position of the stream
@@ -206,18 +178,13 @@ public:
     ////////////////////////////////////////////////////////////
     bool getLoop() const;
 
-    ////////////////////////////////////////////////////////////
-    /// \brief Set the effect processor to be applied to the sound
-    ///
-    /// The effect processor is a callable that will be called
-    /// with sound data to be processed.
-    ///
-    /// \param effectProcessor The effect processor to attach to this sound, attach an empty processor to disable processing
-    ///
-    ////////////////////////////////////////////////////////////
-    void setEffectProcessor(EffectProcessor effectProcessor) override;
-
 protected:
+
+    enum
+    {
+        NoLoop = -1 //!< "Invalid" endSeeks value, telling us to continue uninterrupted
+    };
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
@@ -238,10 +205,9 @@ protected:
     ///
     /// \param channelCount Number of channels of the stream
     /// \param sampleRate   Sample rate, in samples per second
-    /// \param channelMap   Map of position in sample frame to sound channel
     ///
     ////////////////////////////////////////////////////////////
-    void initialize(unsigned int channelCount, unsigned int sampleRate, const std::vector<SoundChannel>& channelMap);
+    void initialize(unsigned int channelCount, unsigned int sampleRate);
 
     ////////////////////////////////////////////////////////////
     /// \brief Request a new chunk of audio samples from the stream source
@@ -260,7 +226,7 @@ protected:
     /// \return True to continue playback, false to stop
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] virtual bool onGetData(Chunk& data) = 0;
+    virtual bool onGetData(Chunk& data) = 0;
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the current playing position in the stream source
@@ -280,28 +246,98 @@ protected:
     /// allow implementation of custom loop points. Otherwise,
     /// it just calls onSeek(Time::Zero) and returns 0.
     ///
-    /// \return The seek position after looping (or std::nullopt if there's no loop)
+    /// \return The seek position after looping (or -1 if there's no loop)
     ///
     ////////////////////////////////////////////////////////////
-    virtual std::optional<std::uint64_t> onLoop();
+    virtual Int64 onLoop();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Set the processing interval
+    ///
+    /// The processing interval controls the period at which the
+    /// audio buffers are filled by calls to onGetData. A smaller
+    /// interval may be useful for low-latency streams. Note that
+    /// the given period is only a hint and the actual period may
+    /// vary. The default processing interval is 10 ms.
+    ///
+    /// \param interval Processing interval
+    ///
+    ////////////////////////////////////////////////////////////
+    void setProcessingInterval(Time interval);
 
 private:
+
     ////////////////////////////////////////////////////////////
-    /// \brief Get the sound object
+    /// \brief Function called as the entry point of the thread
     ///
-    /// \return The sound object
+    /// This function starts the streaming loop, and returns
+    /// only when the sound is stopped.
     ///
     ////////////////////////////////////////////////////////////
-    void* getSound() const override;
+    void streamData();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Fill a new buffer with audio samples, and append
+    ///        it to the playing queue
+    ///
+    /// This function is called as soon as a buffer has been fully
+    /// consumed; it fills it again and inserts it back into the
+    /// playing queue.
+    ///
+    /// \param bufferNum Number of the buffer to fill (in [0, BufferCount])
+    /// \param immediateLoop Treat empty buffers as spent, and act on loops immediately
+    ///
+    /// \return True if the stream source has requested to stop, false otherwise
+    ///
+    ////////////////////////////////////////////////////////////
+    bool fillAndPushBuffer(unsigned int bufferNum, bool immediateLoop = false);
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Fill the audio buffers and put them all into the playing queue
+    ///
+    /// This function is called when playing starts and the
+    /// playing queue is empty.
+    ///
+    /// \return True if the derived class has requested to stop, false otherwise
+    ///
+    ////////////////////////////////////////////////////////////
+    bool fillQueue();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Clear all the audio buffers and empty the playing queue
+    ///
+    /// This function is called when the stream is stopped.
+    ///
+    ////////////////////////////////////////////////////////////
+    void clearQueue();
+
+    enum
+    {
+        BufferCount = 3,    //!< Number of audio buffers used by the streaming loop
+        BufferRetries = 2   //!< Number of retries (excluding initial try) for onGetData()
+    };
 
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    struct Impl;
-    std::unique_ptr<Impl> m_impl; //!< Implementation details
+    Thread        m_thread;                   //!< Thread running the background tasks
+    mutable Mutex m_threadMutex;              //!< Thread mutex
+    Status        m_threadStartState;         //!< State the thread starts in (Playing, Paused, Stopped)
+    bool          m_isStreaming;              //!< Streaming state (true = playing, false = stopped)
+    unsigned int  m_buffers[BufferCount];     //!< Sound buffers used to store temporary audio data
+    unsigned int  m_channelCount;             //!< Number of channels (1 = mono, 2 = stereo, ...)
+    unsigned int  m_sampleRate;               //!< Frequency (samples / second)
+    Int32         m_format;                   //!< Format of the internal sound buffers
+    bool          m_loop;                     //!< Loop flag (true to loop, false to play once)
+    Uint64        m_samplesProcessed;         //!< Number of samples processed since beginning of the stream
+    Int64         m_bufferSeeks[BufferCount]; //!< If buffer is an "end buffer", holds next seek position, else NoLoop. For play offset calculation.
+    Time          m_processingInterval;       //!< Interval for checking and filling the internal sound buffers.
 };
 
 } // namespace sf
+
+
+#endif // SFML_SOUNDSTREAM_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -342,7 +378,7 @@ private:
 /// {
 /// public:
 ///
-///     [[nodiscard]] bool open(const std::string& location)
+///     bool open(const std::string& location)
 ///     {
 ///         // Open the source and get audio settings
 ///         ...
@@ -351,23 +387,22 @@ private:
 ///
 ///         // Initialize the stream -- important!
 ///         initialize(channelCount, sampleRate);
-///         return true;
 ///     }
 ///
 /// private:
 ///
-///     bool onGetData(Chunk& data) override
+///     virtual bool onGetData(Chunk& data)
 ///     {
 ///         // Fill the chunk with audio data from the stream source
 ///         // (note: must not be empty if you want to continue playing)
 ///         data.samples = ...;
+///         data.sampleCount = ...;
 ///
 ///         // Return true to continue playing
-///         data.sampleCount = ...;
 ///         return true;
 ///     }
 ///
-///     void onSeek(sf::Time timeOffset) override
+///     virtual void onSeek(sf::Time timeOffset)
 ///     {
 ///         // Change the current position in the stream source
 ///         ...

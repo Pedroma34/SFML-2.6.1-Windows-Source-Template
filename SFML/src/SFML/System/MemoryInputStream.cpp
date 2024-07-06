@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -26,28 +26,38 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/System/MemoryInputStream.hpp>
-
-#include <algorithm>
-
-#include <cassert>
 #include <cstring>
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-MemoryInputStream::MemoryInputStream(const void* data, std::size_t sizeInBytes) :
-m_data(static_cast<const std::byte*>(data)),
-m_size(sizeInBytes)
+MemoryInputStream::MemoryInputStream() :
+m_data  (NULL),
+m_size  (0),
+m_offset(0)
 {
-    assert(m_data && "MemoryInputStream must be initialized with non-null data");
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<std::size_t> MemoryInputStream::read(void* data, std::size_t size)
+void MemoryInputStream::open(const void* data, std::size_t sizeInBytes)
 {
-    const std::size_t count = std::min(size, m_size - m_offset);
+    m_data = static_cast<const char*>(data);
+    m_size = static_cast<Int64>(sizeInBytes);
+    m_offset = 0;
+}
+
+
+////////////////////////////////////////////////////////////
+Int64 MemoryInputStream::read(void* data, Int64 size)
+{
+    if (!m_data)
+        return -1;
+
+    Int64 endPosition = m_offset + size;
+    Int64 count = endPosition <= m_size ? size : m_size - m_offset;
+
     if (count > 0)
     {
         std::memcpy(data, m_data + m_offset, static_cast<std::size_t>(count));
@@ -59,23 +69,32 @@ std::optional<std::size_t> MemoryInputStream::read(void* data, std::size_t size)
 
 
 ////////////////////////////////////////////////////////////
-std::optional<std::size_t> MemoryInputStream::seek(std::size_t position)
+Int64 MemoryInputStream::seek(Int64 position)
 {
+    if (!m_data)
+        return -1;
+
     m_offset = position < m_size ? position : m_size;
     return m_offset;
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<std::size_t> MemoryInputStream::tell()
+Int64 MemoryInputStream::tell()
 {
+    if (!m_data)
+        return -1;
+
     return m_offset;
 }
 
 
 ////////////////////////////////////////////////////////////
-std::optional<std::size_t> MemoryInputStream::getSize()
+Int64 MemoryInputStream::getSize()
 {
+    if (!m_data)
+        return -1;
+
     return m_size;
 }
 

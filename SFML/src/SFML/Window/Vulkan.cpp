@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -27,24 +27,23 @@
 ////////////////////////////////////////////////////////////
 #include <SFML/Window/Vulkan.hpp>
 
-#include <cassert>
-
 #if defined(SFML_SYSTEM_WINDOWS)
 
-#include <SFML/Window/VulkanImpl.hpp>
+    #include <SFML/Window/Win32/VulkanImplWin32.hpp>
+    typedef sf::priv::VulkanImplWin32 VulkanImplType;
 
-#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || \
-    defined(SFML_SYSTEM_NETBSD)
+#elif defined(SFML_SYSTEM_LINUX) || defined(SFML_SYSTEM_FREEBSD) || defined(SFML_SYSTEM_OPENBSD) || defined(SFML_SYSTEM_NETBSD)
 
-#if defined(SFML_USE_DRM)
+    #if defined(SFML_USE_DRM)
 
-#define SFML_VULKAN_IMPLEMENTATION_NOT_AVAILABLE
+        #define SFML_VULKAN_IMPLEMENTATION_NOT_AVAILABLE
 
-#else
+    #else
 
-#include <SFML/Window/VulkanImpl.hpp>
+        #include <SFML/Window/Unix/VulkanImplX11.hpp>
+        typedef sf::priv::VulkanImplX11 VulkanImplType;
 
-#endif
+    #endif
 
 #else
 
@@ -56,32 +55,32 @@
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-bool Vulkan::isAvailable([[maybe_unused]] bool requireGraphics)
+bool Vulkan::isAvailable(bool requireGraphics)
 {
 #if defined(SFML_VULKAN_IMPLEMENTATION_NOT_AVAILABLE)
 
+    (void) requireGraphics;
     return false;
 
 #else
 
-    return priv::VulkanImpl::isAvailable(requireGraphics);
+    return VulkanImplType::isAvailable(requireGraphics);
 
 #endif
 }
 
 
 ////////////////////////////////////////////////////////////
-VulkanFunctionPointer Vulkan::getFunction([[maybe_unused]] const char* name)
+VulkanFunctionPointer Vulkan::getFunction(const char* name)
 {
-    assert(name && "Name cannot be a null pointer");
-
 #if defined(SFML_VULKAN_IMPLEMENTATION_NOT_AVAILABLE)
 
-    return nullptr;
+    (void) name;
+    return NULL;
 
 #else
 
-    return priv::VulkanImpl::getFunction(name);
+    return VulkanImplType::getFunction(name);
 
 #endif
 }
@@ -98,7 +97,7 @@ const std::vector<const char*>& Vulkan::getGraphicsRequiredInstanceExtensions()
 
 #else
 
-    return priv::VulkanImpl::getGraphicsRequiredInstanceExtensions();
+    return VulkanImplType::getGraphicsRequiredInstanceExtensions();
 
 #endif
 }

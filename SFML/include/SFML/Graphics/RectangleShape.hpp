@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,18 +22,14 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_RECTANGLESHAPE_HPP
+#define SFML_RECTANGLESHAPE_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Graphics/Export.hpp>
-
 #include <SFML/Graphics/Shape.hpp>
-
-#include <SFML/System/Vector2.hpp>
-
-#include <cstddef>
 
 
 namespace sf
@@ -45,13 +41,14 @@ namespace sf
 class SFML_GRAPHICS_API RectangleShape : public Shape
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Default constructor
     ///
     /// \param size Size of the rectangle
     ///
     ////////////////////////////////////////////////////////////
-    explicit RectangleShape(const Vector2f& size = {});
+    explicit RectangleShape(const Vector2f& size = Vector2f(0, 0));
 
     ////////////////////////////////////////////////////////////
     /// \brief Set the size of the rectangle
@@ -80,7 +77,7 @@ public:
     ///         shapes, this number is always 4.
     ///
     ////////////////////////////////////////////////////////////
-    std::size_t getPointCount() const override;
+    virtual std::size_t getPointCount() const;
 
     ////////////////////////////////////////////////////////////
     /// \brief Get a point of the rectangle
@@ -95,21 +92,10 @@ public:
     /// \return index-th point of the shape
     ///
     ////////////////////////////////////////////////////////////
-    Vector2f getPoint(std::size_t index) const override;
-
-    ////////////////////////////////////////////////////////////
-    /// \brief Get the geometric center of the rectangle
-    ///
-    /// The returned point is in local coordinates, that is,
-    /// the shape's transforms (position, rotation, scale) are
-    /// not taken into account.
-    ///
-    /// \return The geometric center of the shape
-    ///
-    ////////////////////////////////////////////////////////////
-    Vector2f getGeometricCenter() const override;
+    virtual Vector2f getPoint(std::size_t index) const;
 
 private:
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
@@ -117,6 +103,9 @@ private:
 };
 
 } // namespace sf
+
+
+#endif // SFML_RECTANGLESHAPE_HPP
 
 
 ////////////////////////////////////////////////////////////
@@ -133,7 +122,7 @@ private:
 /// rectangle.setSize(sf::Vector2f(100, 50));
 /// rectangle.setOutlineColor(sf::Color::Red);
 /// rectangle.setOutlineThickness(5);
-/// rectangle.setPosition({10, 20});
+/// rectangle.setPosition(10, 20);
 /// ...
 /// window.draw(rectangle);
 /// \endcode

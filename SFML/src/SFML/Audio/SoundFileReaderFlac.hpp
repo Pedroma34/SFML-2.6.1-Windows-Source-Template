@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -22,27 +22,21 @@
 //
 ////////////////////////////////////////////////////////////
 
-#pragma once
+#ifndef SFML_SOUNDFILEREADERFLAC_HPP
+#define SFML_SOUNDFILEREADERFLAC_HPP
 
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/SoundFileReader.hpp>
-
 #include <FLAC/stream_decoder.h>
-#include <memory>
-#include <optional>
+#include <string>
 #include <vector>
-
-#include <cstdint>
 
 
 namespace sf
 {
-class InputStream;
-}
-
-namespace sf::priv
+namespace priv
 {
 ////////////////////////////////////////////////////////////
 /// \brief Implementation of sound file reader that handles FLAC files
@@ -51,6 +45,7 @@ namespace sf::priv
 class SoundFileReaderFlac : public SoundFileReader
 {
 public:
+
     ////////////////////////////////////////////////////////////
     /// \brief Check if this reader can handle a file given by an input stream
     ///
@@ -59,17 +54,30 @@ public:
     /// \return True if the file is supported by this reader
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] static bool check(InputStream& stream);
+    static bool check(InputStream& stream);
+
+public:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default constructor
+    ///
+    ////////////////////////////////////////////////////////////
+    SoundFileReaderFlac();
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Default constructor
+    ///
+    ////////////////////////////////////////////////////////////
+    ~SoundFileReaderFlac();
 
     ////////////////////////////////////////////////////////////
     /// \brief Open a sound file for reading
     ///
     /// \param stream Stream to open
-    ///
-    /// \return Properties of the loaded sound if the file was successfully opened
+    /// \param info   Structure to fill with the attributes of the loaded sound
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] std::optional<Info> open(InputStream& stream) override;
+    virtual bool open(sf::InputStream& stream, Info& info);
 
     ////////////////////////////////////////////////////////////
     /// \brief Change the current read position to the given sample offset
@@ -84,7 +92,7 @@ public:
     /// \param sampleOffset Index of the sample to jump to, relative to the beginning
     ///
     ////////////////////////////////////////////////////////////
-    void seek(std::uint64_t sampleOffset) override;
+    virtual void seek(Uint64 sampleOffset);
 
     ////////////////////////////////////////////////////////////
     /// \brief Read audio samples from the open file
@@ -95,7 +103,9 @@ public:
     /// \return Number of samples actually read (may be less than \a maxCount)
     ///
     ////////////////////////////////////////////////////////////
-    [[nodiscard]] std::uint64_t read(std::int16_t* samples, std::uint64_t maxCount) override;
+    virtual Uint64 read(Int16* samples, Uint64 maxCount);
+
+public:
 
     ////////////////////////////////////////////////////////////
     /// \brief Hold the state that is passed to the decoder callbacks
@@ -103,24 +113,32 @@ public:
     ////////////////////////////////////////////////////////////
     struct ClientData
     {
-        InputStream*              stream{};
-        SoundFileReader::Info     info;
-        std::int16_t*             buffer{};
-        std::uint64_t             remaining{};
-        std::vector<std::int16_t> leftovers;
-        bool                      error{};
+        InputStream*          stream;
+        SoundFileReader::Info info;
+        Int16*                buffer;
+        Uint64                remaining;
+        std::vector<Int16>    leftovers;
+        bool                  error;
     };
 
 private:
+
+    ////////////////////////////////////////////////////////////
+    /// \brief Close the open FLAC file
+    ///
+    ////////////////////////////////////////////////////////////
+    void close();
+
     ////////////////////////////////////////////////////////////
     // Member data
     ////////////////////////////////////////////////////////////
-    struct FlacStreamDecoderDeleter
-    {
-        void operator()(FLAC__StreamDecoder* decoder) const;
-    };
-    std::unique_ptr<FLAC__StreamDecoder, FlacStreamDecoderDeleter> m_decoder; //!< FLAC decoder
-    ClientData m_clientData; //!< Structure passed to the decoder callbacks
+    FLAC__StreamDecoder* m_decoder;    //!< FLAC decoder
+    ClientData           m_clientData; //!< Structure passed to the decoder callbacks
 };
 
-} // namespace sf::priv
+} // namespace priv
+
+} // namespace sf
+
+
+#endif // SFML_SOUNDFILEREADERFLAC_HPP

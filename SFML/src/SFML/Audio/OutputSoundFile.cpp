@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -26,48 +26,53 @@
 // Headers
 ////////////////////////////////////////////////////////////
 #include <SFML/Audio/OutputSoundFile.hpp>
-#include <SFML/Audio/SoundFileFactory.hpp>
 #include <SFML/Audio/SoundFileWriter.hpp>
-
-#include <SFML/System/Err.hpp>
-
-#include <cassert>
+#include <SFML/Audio/SoundFileFactory.hpp>
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-std::optional<OutputSoundFile> OutputSoundFile::openFromFile(
-    const std::filesystem::path&     filename,
-    unsigned int                     sampleRate,
-    unsigned int                     channelCount,
-    const std::vector<SoundChannel>& channelMap)
+OutputSoundFile::OutputSoundFile() :
+m_writer(NULL)
 {
-    // Find a suitable writer for the file type
-    auto writer = SoundFileFactory::createWriterFromFilename(filename);
-    if (!writer)
-    {
-        // Error message generated in called function.
-        return std::nullopt;
-    }
-
-    // Pass the stream to the reader
-    if (!writer->open(filename, sampleRate, channelCount, channelMap))
-    {
-        err() << "Failed to open output sound file from file (writer open failure)" << std::endl;
-        return std::nullopt;
-    }
-
-    return OutputSoundFile(std::move(writer));
 }
 
 
 ////////////////////////////////////////////////////////////
-void OutputSoundFile::write(const std::int16_t* samples, std::uint64_t count)
+OutputSoundFile::~OutputSoundFile()
 {
-    assert(m_writer);
+    // Close the file in case it was open
+    close();
+}
 
-    if (samples && count)
+
+////////////////////////////////////////////////////////////
+bool OutputSoundFile::openFromFile(const std::string& filename, unsigned int sampleRate, unsigned int channelCount)
+{
+    // If the file is already open, first close it
+    close();
+
+    // Find a suitable writer for the file type
+    m_writer = SoundFileFactory::createWriterFromFilename(filename);
+    if (!m_writer)
+        return false;
+
+    // Pass the stream to the reader
+    if (!m_writer->open(filename, sampleRate, channelCount))
+    {
+        close();
+        return false;
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////
+void OutputSoundFile::write(const Int16* samples, Uint64 count)
+{
+    if (m_writer && samples && count)
         m_writer->write(samples, count);
 }
 
@@ -76,13 +81,8 @@ void OutputSoundFile::write(const std::int16_t* samples, std::uint64_t count)
 void OutputSoundFile::close()
 {
     // Destroy the reader
-    m_writer.reset();
-}
-
-
-////////////////////////////////////////////////////////////
-OutputSoundFile::OutputSoundFile(std::unique_ptr<SoundFileWriter>&& writer) : m_writer(std::move(writer))
-{
+    delete m_writer;
+    m_writer = NULL;
 }
 
 } // namespace sf

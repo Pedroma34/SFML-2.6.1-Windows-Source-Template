@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////
 //
 // SFML - Simple and Fast Multimedia Library
-// Copyright (C) 2007-2024 Laurent Gomila (laurent@sfml-dev.org)
+// Copyright (C) 2007-2023 Laurent Gomila (laurent@sfml-dev.org)
 //
 // This software is provided 'as-is', without any express or implied warranty.
 // In no event will the authors be held liable for any damages arising from the use of this software.
@@ -25,67 +25,83 @@
 ////////////////////////////////////////////////////////////
 // Headers
 ////////////////////////////////////////////////////////////
-#include <SFML/Graphics/GLCheck.hpp>
-#include <SFML/Graphics/GLExtensions.hpp>
+#include <SFML/Graphics/VertexBuffer.hpp>
 #include <SFML/Graphics/RenderTarget.hpp>
 #include <SFML/Graphics/Vertex.hpp>
-#include <SFML/Graphics/VertexBuffer.hpp>
-
+#include <SFML/Graphics/GLCheck.hpp>
+#include <SFML/System/Mutex.hpp>
+#include <SFML/System/Lock.hpp>
 #include <SFML/System/Err.hpp>
-
-#include <ostream>
-#include <utility>
-
-#include <cstddef>
 #include <cstring>
-
 
 namespace
 {
-// A nested named namespace is used here to allow unity builds of SFML.
-namespace VertexBufferImpl
-{
-GLenum usageToGlEnum(sf::VertexBuffer::Usage usage)
-{
-    switch (usage)
+    // A nested named namespace is used here to allow unity builds of SFML.
+    namespace VertexBufferImpl
     {
-        case sf::VertexBuffer::Usage::Static:
-            return GLEXT_GL_STATIC_DRAW;
-        case sf::VertexBuffer::Usage::Dynamic:
-            return GLEXT_GL_DYNAMIC_DRAW;
-        default:
-            return GLEXT_GL_STREAM_DRAW;
+        sf::Mutex isAvailableMutex;
+
+        GLenum usageToGlEnum(sf::VertexBuffer::Usage usage)
+        {
+            switch (usage)
+            {
+                case sf::VertexBuffer::Static:  return GLEXT_GL_STATIC_DRAW;
+                case sf::VertexBuffer::Dynamic: return GLEXT_GL_DYNAMIC_DRAW;
+                default:                        return GLEXT_GL_STREAM_DRAW;
+            }
+        }
     }
 }
-} // namespace VertexBufferImpl
-} // namespace
 
 
 namespace sf
 {
 ////////////////////////////////////////////////////////////
-VertexBuffer::VertexBuffer(PrimitiveType type) : m_primitiveType(type)
+VertexBuffer::VertexBuffer() :
+m_buffer       (0),
+m_size         (0),
+m_primitiveType(Points),
+m_usage        (Stream)
 {
 }
 
 
 ////////////////////////////////////////////////////////////
-VertexBuffer::VertexBuffer(Usage usage) : m_usage(usage)
+VertexBuffer::VertexBuffer(PrimitiveType type) :
+m_buffer       (0),
+m_size         (0),
+m_primitiveType(type),
+m_usage        (Stream)
 {
 }
 
 
 ////////////////////////////////////////////////////////////
-VertexBuffer::VertexBuffer(PrimitiveType type, Usage usage) : m_primitiveType(type), m_usage(usage)
+VertexBuffer::VertexBuffer(VertexBuffer::Usage usage) :
+m_buffer       (0),
+m_size         (0),
+m_primitiveType(Points),
+m_usage        (usage)
+{
+}
+
+
+////////////////////////////////////////////////////////////
+VertexBuffer::VertexBuffer(PrimitiveType type, VertexBuffer::Usage usage) :
+m_buffer       (0),
+m_size         (0),
+m_primitiveType(type),
+m_usage        (usage)
 {
 }
 
 
 ////////////////////////////////////////////////////////////
 VertexBuffer::VertexBuffer(const VertexBuffer& copy) :
-GlResource(copy),
+m_buffer       (0),
+m_size         (0),
 m_primitiveType(copy.m_primitiveType),
-m_usage(copy.m_usage)
+m_usage        (copy.m_usage)
 {
     if (copy.m_buffer && copy.m_size)
     {
@@ -106,7 +122,7 @@ VertexBuffer::~VertexBuffer()
 {
     if (m_buffer)
     {
-        const TransientContextLock contextLock;
+        TransientContextLock contextLock;
 
         glCheck(GLEXT_glDeleteBuffers(1, &m_buffer));
     }
@@ -119,7 +135,7 @@ bool VertexBuffer::create(std::size_t vertexCount)
     if (!isAvailable())
         return false;
 
-    const TransientContextLock contextLock;
+    TransientContextLock contextLock;
 
     if (!m_buffer)
         glCheck(GLEXT_glGenBuffers(1, &m_buffer));
@@ -131,10 +147,7 @@ bool VertexBuffer::create(std::size_t vertexCount)
     }
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, m_buffer));
-    glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER,
-                               static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount),
-                               nullptr,
-                               VertexBufferImpl::usageToGlEnum(m_usage)));
+    glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER, static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount), 0, VertexBufferImpl::usageToGlEnum(m_usage)));
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, 0));
 
     m_size = vertexCount;
@@ -170,25 +183,19 @@ bool VertexBuffer::update(const Vertex* vertices, std::size_t vertexCount, unsig
     if (offset && (offset + vertexCount > m_size))
         return false;
 
-    const TransientContextLock contextLock;
+    TransientContextLock contextLock;
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, m_buffer));
 
     // Check if we need to resize or orphan the buffer
     if (vertexCount >= m_size)
     {
-        glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER,
-                                   static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount),
-                                   nullptr,
-                                   VertexBufferImpl::usageToGlEnum(m_usage)));
+        glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER, static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount), 0, VertexBufferImpl::usageToGlEnum(m_usage)));
 
         m_size = vertexCount;
     }
 
-    glCheck(GLEXT_glBufferSubData(GLEXT_GL_ARRAY_BUFFER,
-                                  static_cast<GLintptrARB>(sizeof(Vertex) * offset),
-                                  static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount),
-                                  vertices));
+    glCheck(GLEXT_glBufferSubData(GLEXT_GL_ARRAY_BUFFER, static_cast<GLintptrARB>(sizeof(Vertex) * offset), static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexCount), vertices));
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, 0));
 
@@ -197,10 +204,11 @@ bool VertexBuffer::update(const Vertex* vertices, std::size_t vertexCount, unsig
 
 
 ////////////////////////////////////////////////////////////
-bool VertexBuffer::update([[maybe_unused]] const VertexBuffer& vertexBuffer)
+bool VertexBuffer::update(const VertexBuffer& vertexBuffer)
 {
 #ifdef SFML_OPENGL_ES
 
+    (void) vertexBuffer;
     return false;
 
 #else
@@ -208,7 +216,7 @@ bool VertexBuffer::update([[maybe_unused]] const VertexBuffer& vertexBuffer)
     if (!m_buffer || !vertexBuffer.m_buffer)
         return false;
 
-    const TransientContextLock contextLock;
+    TransientContextLock contextLock;
 
     // Make sure that extensions are initialized
     sf::priv::ensureExtensionsInit();
@@ -218,11 +226,7 @@ bool VertexBuffer::update([[maybe_unused]] const VertexBuffer& vertexBuffer)
         glCheck(GLEXT_glBindBuffer(GLEXT_GL_COPY_READ_BUFFER, vertexBuffer.m_buffer));
         glCheck(GLEXT_glBindBuffer(GLEXT_GL_COPY_WRITE_BUFFER, m_buffer));
 
-        glCheck(GLEXT_glCopyBufferSubData(GLEXT_GL_COPY_READ_BUFFER,
-                                          GLEXT_GL_COPY_WRITE_BUFFER,
-                                          0,
-                                          0,
-                                          static_cast<GLsizeiptr>(sizeof(Vertex) * vertexBuffer.m_size)));
+        glCheck(GLEXT_glCopyBufferSubData(GLEXT_GL_COPY_READ_BUFFER, GLEXT_GL_COPY_WRITE_BUFFER, 0, 0, static_cast<GLsizeiptr>(sizeof(Vertex) * vertexBuffer.m_size)));
 
         glCheck(GLEXT_glBindBuffer(GLEXT_GL_COPY_WRITE_BUFFER, 0));
         glCheck(GLEXT_glBindBuffer(GLEXT_GL_COPY_READ_BUFFER, 0));
@@ -231,17 +235,14 @@ bool VertexBuffer::update([[maybe_unused]] const VertexBuffer& vertexBuffer)
     }
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, m_buffer));
-    glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER,
-                               static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexBuffer.m_size),
-                               nullptr,
-                               VertexBufferImpl::usageToGlEnum(m_usage)));
+    glCheck(GLEXT_glBufferData(GLEXT_GL_ARRAY_BUFFER, static_cast<GLsizeiptrARB>(sizeof(Vertex) * vertexBuffer.m_size), 0, VertexBufferImpl::usageToGlEnum(m_usage)));
 
-    void* destination = nullptr;
+    void* destination = 0;
     glCheck(destination = GLEXT_glMapBuffer(GLEXT_GL_ARRAY_BUFFER, GLEXT_GL_WRITE_ONLY));
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, vertexBuffer.m_buffer));
 
-    void* source = nullptr;
+    void* source = 0;
     glCheck(source = GLEXT_glMapBuffer(GLEXT_GL_ARRAY_BUFFER, GLEXT_GL_READ_ONLY));
 
     std::memcpy(destination, source, sizeof(Vertex) * vertexBuffer.m_size);
@@ -256,14 +257,17 @@ bool VertexBuffer::update([[maybe_unused]] const VertexBuffer& vertexBuffer)
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, 0));
 
-    return (sourceResult == GL_TRUE) && (destinationResult == GL_TRUE);
+    if ((sourceResult == GL_FALSE) || (destinationResult == GL_FALSE))
+        return false;
+
+    return true;
 
 #endif // SFML_OPENGL_ES
 }
 
 
 ////////////////////////////////////////////////////////////
-VertexBuffer& VertexBuffer::operator=(const VertexBuffer& right)
+VertexBuffer& VertexBuffer::operator =(const VertexBuffer& right)
 {
     VertexBuffer temp(right);
 
@@ -274,12 +278,12 @@ VertexBuffer& VertexBuffer::operator=(const VertexBuffer& right)
 
 
 ////////////////////////////////////////////////////////////
-void VertexBuffer::swap(VertexBuffer& right) noexcept
+void VertexBuffer::swap(VertexBuffer& right)
 {
-    std::swap(m_size, right.m_size);
-    std::swap(m_buffer, right.m_buffer);
+    std::swap(m_size,          right.m_size);
+    std::swap(m_buffer,        right.m_buffer);
     std::swap(m_primitiveType, right.m_primitiveType);
-    std::swap(m_usage, right.m_usage);
+    std::swap(m_usage,         right.m_usage);
 }
 
 
@@ -296,7 +300,7 @@ void VertexBuffer::bind(const VertexBuffer* vertexBuffer)
     if (!isAvailable())
         return;
 
-    const TransientContextLock lock;
+    TransientContextLock lock;
 
     glCheck(GLEXT_glBindBuffer(GLEXT_GL_ARRAY_BUFFER, vertexBuffer ? vertexBuffer->m_buffer : 0));
 }
@@ -317,7 +321,7 @@ PrimitiveType VertexBuffer::getPrimitiveType() const
 
 
 ////////////////////////////////////////////////////////////
-void VertexBuffer::setUsage(Usage usage)
+void VertexBuffer::setUsage(VertexBuffer::Usage usage)
 {
     m_usage = usage;
 }
@@ -333,15 +337,22 @@ VertexBuffer::Usage VertexBuffer::getUsage() const
 ////////////////////////////////////////////////////////////
 bool VertexBuffer::isAvailable()
 {
-    static const bool available = []
+    Lock lock(VertexBufferImpl::isAvailableMutex);
+
+    static bool checked = false;
+    static bool available = false;
+
+    if (!checked)
     {
-        const TransientContextLock contextLock;
+        checked = true;
+
+        TransientContextLock contextLock;
 
         // Make sure that extensions are initialized
         sf::priv::ensureExtensionsInit();
 
-        return GLEXT_vertex_buffer_object != 0;
-    }();
+        available = GLEXT_vertex_buffer_object;
+    }
 
     return available;
 }
@@ -352,13 +363,6 @@ void VertexBuffer::draw(RenderTarget& target, RenderStates states) const
 {
     if (m_buffer && m_size)
         target.draw(*this, 0, m_size, states);
-}
-
-
-////////////////////////////////////////////////////////////
-void swap(VertexBuffer& left, VertexBuffer& right) noexcept
-{
-    left.swap(right);
 }
 
 } // namespace sf
