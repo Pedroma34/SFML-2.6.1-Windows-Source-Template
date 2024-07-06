@@ -1,20 +1,16 @@
 #include "SFML/Graphics.hpp" //Has to be included first, otherwise rect.inl will not compile.
 #include "SFML/Audio.hpp"
+#include "Config.h"
 #include <windows.h>
-#include <iostream>
 #include <Directory.h>
 
 int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWSTR cmdline,	_In_ int cmdshow){
+    
+    //Debug console
+    ALLOCATE_CSL();
+	DEBUG_MSG("SFML Application - 2.6.1");
 
-	/* IF YOU WANT TO GET THE CONSOLE TO SHOW UP
-	AllocConsole();
-    FILE* file = nullptr;
-    freopen_s(&file, "CONOUT$", "w", stdout);
-    freopen_s(&file, "CONOUT$", "w", stderr);
-    freopen_s(&file, "CONIN$", "r", stdin);
-    */
-
-
+    //Window
 	sf::RenderWindow window(sf::VideoMode(800, 600), "SFML works!");
 
     //Sound
@@ -24,10 +20,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWS
         MessageBoxA(NULL, std::string("Can't load: " + soundPath).c_str(), "Error", MB_ICONERROR);
 		return 1;
     }
-
 	sf::Sound sound;
 	sound.setBuffer(buffer);
 
+    //Shape
     sf::CircleShape shape(100.f);
     shape.setFillColor(sf::Color::Green);
 
