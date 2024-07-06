@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <Directory.h>
 
-int WINAPI WinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWSTR cmdline,	_In_ int cmdshow){
+int WINAPI wWinMain(_In_ HINSTANCE hInst, _In_opt_ HINSTANCE hInstPrev,	_In_ PWSTR cmdline,	_In_ int cmdshow){
     
     //Debug console
     ALLOCATE_CSL();
