@@ -4,6 +4,12 @@
 **/.vcxproj.filters
 **/.vcxproj
 **/.sln
+**/Makefile
+
+AppWindows/AppWindows.vcxproj.user
+AppWindows/AppWindows.vcxproj
+AppWindows/AppWindows.vs
+AppWindows/AppWindows.vcxproj.filters
 
 #Ignore folder called VS2022
 **/VS2022/
