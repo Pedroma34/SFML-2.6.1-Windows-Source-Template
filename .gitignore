@@ -7,8 +7,6 @@
 **/*Makefile
 **/*.make
 
-#Ignore folder called VS2022
-**/VS2022/
 #Ignore folder called Binaries
-**/_Binaries/
-**/_Intermediate/
+**/Libs/
+**/Int/
