@@ -1,0 +1,37 @@
+﻿  BlendMode.cpp
+  CircleShape.cpp
+  Color.cpp
+  ConvexShape.cpp
+  Font.cpp
+  GLCheck.cpp
+  GLExtensions.cpp
+  Glsl.cpp
+  Image.cpp
+  ImageLoader.cpp
+C:\DEV\C++\GitHub\SFML-2.6.1-Windows-Source-Template\Projects\SFML\extlibs\headers\stb_image\stb_image_write.h(776,13): warning C4996: 'sprintf': This function or variable may be unsafe. Consider using sprintf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  (compiling source file 'src/SFML/Graphics/ImageLoader.cpp')
+  
+  RectangleShape.cpp
+  RenderStates.cpp
+  RenderTarget.cpp
+  RenderTexture.cpp
+  RenderTextureImpl.cpp
+  RenderTextureImplDefault.cpp
+  RenderTextureImplFBO.cpp
+  RenderWindow.cpp
+  Shader.cpp
+  Shape.cpp
+  Generating Code...
+  Compiling...
+  Sprite.cpp
+  Text.cpp
+  Texture.cpp
+  TextureSaver.cpp
+  Transform.cpp
+  Transformable.cpp
+  Vertex.cpp
+  VertexArray.cpp
+  VertexBuffer.cpp
+  View.cpp
+  Generating Code...
+  SFML-Graphics.vcxproj -> C:\DEV\C++\GitHub\SFML-2.6.1-Windows-Source-Template\_Binaries\Debug\SFML-Graphics\SFML-Graphics.lib
