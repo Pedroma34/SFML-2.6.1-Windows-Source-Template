@@ -10,4 +10,5 @@
 #Ignore folder called VS2022
 **/VS2022/
 #Ignore folder called Binaries
-**/Binaries/
+**/_Binaries/
+**/_Intermediate/
