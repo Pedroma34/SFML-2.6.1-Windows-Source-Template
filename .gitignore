@@ -1,15 +1,11 @@
 #Ignore all .vcxproj.user files and all visual studio generated files in any directory
-**/.vcxproj.user
-**/.vs/
-**/.vcxproj.filters
-**/.vcxproj
-**/.sln
-**/Makefile
-
-AppWindows/AppWindows.vcxproj.user
-AppWindows/AppWindows.vcxproj
-AppWindows/AppWindows.vs
-AppWindows/AppWindows.vcxproj.filters
+**/*.vcxproj.user
+**/*.vs/
+**/*.vcxproj.filters
+**/*.vcxproj
+**/*.sln
+**/*Makefile
+**/*.make
 
 #Ignore folder called VS2022
 **/VS2022/
